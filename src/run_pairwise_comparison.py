@@ -9,7 +9,7 @@ from insightface.app import FaceAnalysis
 # =========================
 # Config
 # =========================
-MAX_FACES = 5
+MAX_FACES = 11
 DET_SIZE = (640, 640)
 CTX_ID = -1   # CPU; usa 0 si tienes GPU configurada
 FACE_SIZE = (112, 112)
@@ -19,7 +19,7 @@ FACE_SIZE = (112, 112)
 # Core class
 # =========================
 class MultiFaceComparator:
-    def __init__(self, det_size=(640, 640), ctx_id=-1, max_faces=5):
+    def __init__(self, det_size=(640, 640), ctx_id=-1, max_faces=11):
         self.max_faces = max_faces
         self.app = FaceAnalysis(name="buffalo_l")
         self.app.prepare(ctx_id=ctx_id, det_size=det_size)
@@ -105,56 +105,7 @@ def add_image_to_axis(ax, img, xy, zoom=0.45):
     )
     ax.add_artist(ab)
 
-'''
-def plot_similarity_heatmap(sim_matrix, faces_a, faces_b, output_path=None):
-    n_rows, n_cols = sim_matrix.shape
 
-    fig, ax = plt.subplots(figsize=(2 + n_cols * 1.5, 2 + n_rows * 1.5))
-
-    im = ax.imshow(sim_matrix, aspect="auto")
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Cosine similarity")
-
-    # ticks base
-    ax.set_xticks(range(n_cols))
-    ax.set_yticks(range(n_rows))
-
-    # ocultamos labels textuales porque pondremos miniaturas
-    ax.set_xticklabels([""] * n_cols)
-    ax.set_yticklabels([""] * n_rows)
-
-    # valores en celdas
-    for i in range(n_rows):
-        for j in range(n_cols):
-            ax.text(
-                j, i,
-                f"{sim_matrix[i, j]:.2f}",
-                ha="center",
-                va="center"
-            )
-
-    ax.set_xlabel("Rostros imagen B")
-    ax.set_ylabel("Rostros imagen A")
-    ax.set_title("Comparación cruzada de rostros")
-
-    # ampliar margen para poner miniaturas
-    ax.set_xlim(-0.5, n_cols - 0.5)
-    ax.set_ylim(n_rows - 0.5, -0.5)
-
-    # miniaturas arriba (columnas)
-    for j, face in enumerate(faces_b):
-        add_image_to_axis(ax, face["crop"], (j, -0.85), zoom=0.35)
-
-    # miniaturas izquierda (filas)
-    for i, face in enumerate(faces_a):
-        add_image_to_axis(ax, face["crop"], (-0.85, i), zoom=0.35)
-
-    plt.tight_layout()
-
-    if output_path is not None:
-        plt.savefig(output_path, dpi=200, bbox_inches="tight")
-
-    plt.show()
-'''
 def add_face_thumbnail(ax, img, xy, zoom=0.32):
     imagebox = OffsetImage(img, zoom=zoom)
     ab = AnnotationBbox(
@@ -230,12 +181,15 @@ def plot_similarity_heatmap(sim_matrix, faces_a, faces_b, output_path=None):
 # Main
 # =========================
 if __name__ == "__main__":
-    image_a = Path("data/input/img/IMG_20260104_144832707.jpg")
+    #image_a = Path("data/input/img/IMG_20260104_144832707.jpg")
+    #image_a = Path("data/input/img/fraternos_jovenes.jpg")
     #image_b = Path("data/input/img/fraternosChacabuco8.jpg")
     #image_b = Path("data/input/img/fraternosAsado.jpg")
     #image_b = Path("data/input/img/Señores_o_gente.jpg")
     #image_b =Path("data/input/img/brunoRio.jpg")
-    image_b =Path("data/input/img/DiegoSofiaY3Mas.jpg")
+    #image_b =Path("data/input/img/DiegoSofiaY3Mas.jpg")
+    image_a = Path("data/input/img/teams/seleccion-de-argelia.jpg")
+    image_b = Path("data/input/img/teams/seleccion-de-argentina.jpg")
     output_plot = Path("data/output/heatmap_faces.png")
 
     output_plot.parent.mkdir(parents=True, exist_ok=True)

@@ -1,1 +1,29 @@
 data/
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+
+# Entornos
+.venv/
+env/
+venv/
+
+# Archivos generados pesados
+data/output/
+results/
+figures/
+plots/
+exports/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.html
+*.parquet
+*.feather
+*.pkl
+*.joblib
+*.ipynb
