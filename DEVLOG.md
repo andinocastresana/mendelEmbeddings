@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
-### `[hash pendiente]` · T1 pasos 1–6: migración del notebook experimental al paquete `phyloface` (motor casi completo) `T1`
+### `9586cf5` · T1 pasos 1–6: migración del notebook experimental al paquete `phyloface` (motor casi completo) `T1`
 
 - Avance de la **Tarea #1** (migración de `src/phyloface_experimental_functions.py` → `src/phyloface/`). 34/40 funciones migradas en 6 pasos verificados con smoke tests independientes. Pendientes: paso 7 (`viz/`), 8 (reescribir notebook), 9 (archivar el archivo experimental original).
 - **Paso 1**: tracker `_meta/MIGRACION_TAREA1.md` con mapa función→destino y bitácora granular del avance.
@@ -31,7 +31,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-19
 
-### `[hash pendiente]` · Alta de arquitectura, integración de charla externa y bibliografía kinship `T1↑ T2↑ T3↑ T4↑ T5↑ T6↑ T7↑ T8↑ T9↑ T10↑ T11↑ T12↑ T13↑ T14↑ T15↑ T16↑ T17↑ T18↑ T19↑ T20↑ T21↑ T22↑ T23↑ T24↑`
+### `9586cf5` · Alta de arquitectura, integración de charla externa y bibliografía kinship `T1↑ T2↑ T3↑ T4↑ T5↑ T6↑ T7↑ T8↑ T9↑ T10↑ T11↑ T12↑ T13↑ T14↑ T15↑ T16↑ T17↑ T18↑ T19↑ T20↑ T21↑ T22↑ T23↑ T24↑`
 
 - `ARQUITECTURA.md` creado (raíz del proyecto): documento vivo con el esqueleto del motor de comparación, las dos apps (primaria = niño↔progenitores; secundaria = grupos/equipos), capa de visualización y bloque de validación. Cada componente marcado con ✅/🔄/⏳ reflejando estado actual. Incluye tabla de decisiones cerradas (derivadas de la charla externa con ChatGPT en `data/input/docs/charlaChatGPT.md`) y decisiones abiertas.
 - `TAREAS_PENDIENTES.md` reescrito desde cero. Se descartan las 8 tareas iniciales (puramente estructurales) y se reemplazan por 24 tareas colgadas de cada bloque numerado de `ARQUITECTURA.md`. Códigos de área = referencia a bloques (M1.x = motor, A2.x = app, V = viz, B = benchmark).
