@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
-### `[hash pendiente]` · T1 pasos 7–9: cierre de la Tarea #1 (viz/, notebook reescrito y archivo experimental archivado) `T1✓`
+### `e1a6511` · T1 pasos 7–9: cierre de la Tarea #1 (viz/, notebook reescrito y archivo experimental archivado) `T1✓`
 
 - **Cierre de la Tarea #1** (migración `src/phyloface_experimental_functions.py` → `src/phyloface/`). 40/40 funciones migradas + notebook funcional + archivo original archivado en `_toReview/`.
 - **Paso 7**: subpaquete `src/phyloface/viz/` con 3 archivos nuevos (`detection.py`, `landmarks.py`, `regions.py`) — ID `PHYLOFACE_VIZ_001 v1.0`. 7 funciones de plotting migradas; `__init__.py` actualizado para re-exportar las nuevas + las 2 pre-existentes de `heatmap.py`. Primer smoke test como archivo versionado (`tests/smoke/test_paso_7_viz.py`, ID `PHYLOFACE_SMOKE_007 v1.0`) con backend `Agg`; convención documentada en `tests/smoke/README.md`.
