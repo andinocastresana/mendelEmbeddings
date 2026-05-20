@@ -11,6 +11,19 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
+### `[hash pendiente]` · Track 2a — Spike MediaPipe Face Mesh JS vs Python (PASS) + setup del cliente con tabs `T2`
+
+- **Spike menor PHYLOFACE_SPIKE_002**: verifica que **MediaPipe Tasks for Web** (`@mediapipe/tasks-vision`) produce los mismos 478 landmarks faciales que la versión Python de MediaPipe Face Mesh.
+  - `scripts/verify_mediapipe_web_parity.py`: genera fixture en `client/public/spike_fixtures_mediapipe/` (imagen 224x224 + 478 landmarks de referencia + metadata).
+  - Cliente: nuevo componente `SpikeMediapipe.tsx` que carga MediaPipe Face Landmarker (modelo `.task` desde CDN de Google ~3-4 MB) y compara con la referencia Python. Overlay visual con landmarks JS (verde) y Python (rojo).
+  - Criterios: mean < 2px, max < 5px sobre imagen 224x224 (loose porque MediaPipe Web puede tener variaciones sub-pixel por cuantización).
+  - **Resultado**: PASS. Las dos piezas técnicas del Track 2a están confirmadas:
+    - **Embedding** (ONNX Runtime Web + `w600k_r50.onnx`) ✅ desde `de8b1a2`.
+    - **Landmarks** (MediaPipe Tasks for Web + Face Landmarker) ✅ ahora.
+- **Refactor de App.tsx**: `App.tsx` ahora es un router simple con tabs entre los dos spikes (`SpikeOnnx` + `SpikeMediapipe`). Cuando arranque el comparador real (próxima sesión), `App.tsx` se reemplaza por el comparador con tabs como vista de "spikes legacy".
+- **Decisión sobre fixtures**: ambos directorios `client/public/spike_fixtures*/` quedan gitignored (regenerables con sus scripts Python respectivos). Excepción explícita: PDF de snapshots de arquitectura via `!_meta/**/*.pdf`.
+- Tarea #2 creada en TaskList: "Track 2a — comparador anónimo 100% browser (MVP)". Sigue in_progress; los dos spikes son hitos del avance pero el comparador real aún no está construido (próxima sesión: alineación canónica JS replicando `align_face_from_record`, después UI de subir 2 fotos + comparar).
+
 ### `de8b1a2` · Sesión de diseño stack web + snapshot v0.1 + spike Track 2a (con bugfix latente del motor)
 
 - **Diseño arquitectónico del stack web público**: tras una sesión de discusión con el usuario, plan revisado a **2 tracks paralelos con arquitectura híbrida** (cliente-pesado / server-liviano):

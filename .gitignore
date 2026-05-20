@@ -16,8 +16,8 @@ dist/
 # Modelos pesados copiados al public del cliente (no commit, se bajan / copian localmente)
 client/public/models/
 
-# Fixtures del spike Track 2a (regenerables con `python3 scripts/verify_onnx_web_parity.py`)
-client/public/spike_fixtures/
+# Fixtures de spikes Track 2a (regenerables con los scripts en scripts/verify_*)
+client/public/spike_fixtures*/
 
 # Entornos
 .venv/
