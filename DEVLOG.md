@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
-### `[hash pendiente]` · Track 2a — Spike MediaPipe Face Mesh JS vs Python (PASS) + setup del cliente con tabs `T2`
+### `5e1a642` · Track 2a — Spike MediaPipe Face Mesh JS vs Python (PASS) + setup del cliente con tabs `T2`
 
 - **Spike menor PHYLOFACE_SPIKE_002**: verifica que **MediaPipe Tasks for Web** (`@mediapipe/tasks-vision`) produce los mismos 478 landmarks faciales que la versión Python de MediaPipe Face Mesh.
   - `scripts/verify_mediapipe_web_parity.py`: genera fixture en `client/public/spike_fixtures_mediapipe/` (imagen 224x224 + 478 landmarks de referencia + metadata).
