@@ -37,11 +37,27 @@
 # - No normaliza el embedding (eso lo hace `core.metrics.l2_normalize`
 #   en el momento de comparar; el embedding crudo se guarda tal cual).
 # - No inicializa el `FaceAnalysis` (eso es `pairs.init_face_app`, 6c).
+#
+# === BUGFIX 2026-05-20 (Spike Track 2a) ===
+# Descubrimiento del Spike de paridad JS/Python: `get_feat` de InsightFace
+# usa internamente `cv2.dnn.blobFromImages(..., swapRB=True)`, lo que
+# significa que **asume input en BGR** (default de OpenCV) y convierte a
+# RGB antes de pasar al modelo. El archivo experimental original (y por
+# herencia esta función) le pasaba `aligned_rgb` (ya en RGB) → el swap
+# interno lo invertía → el modelo recibía BGR → canales invertidos vs
+# entrenamiento.
+#
+# El bug era **silencioso cualitativamente**: como ambas caras de un par
+# sufrían la misma inversión, la similitud coseno entre ellas seguía
+# midiendo "qué tan parecidas son las imágenes" de forma consistente; el
+# ranking se preservaba. Pero el valor absoluto del embedding no era el
+# "verdadero" del modelo, lo que invalida calibraciones contra umbrales
+# externos o comparaciones contra embeddings de otros sistemas.
+#
+# Fix: convertir RGB→BGR antes de llamar `get_feat`, así el swap interno
+# lo devuelve a RGB y el modelo recibe lo que esperaba ver en training.
 
-# -----------------------------------------
-# FILE: phyloface/core/embedder.py
-# -----------------------------------------
-
+import cv2
 import numpy as np
 
 
@@ -108,9 +124,16 @@ def extract_embedding_from_aligned(rec_model, aligned_rgb: np.ndarray) -> np.nda
     Devuelve:
         ndarray float32 unidimensional con el embedding.
     """
+    # === BUGFIX 2026-05-20 (ver cabecera del módulo) ===
+    # `get_feat` usa internamente `cv2.dnn.blobFromImages(..., swapRB=True)`,
+    # que asume input en BGR (default OpenCV) y lo convierte a RGB para el
+    # modelo. Como nosotros tenemos RGB, debemos pasar BGR para que el swap
+    # interno lo "devuelva" a RGB y el modelo reciba lo que esperaba en training.
+    aligned_bgr = cv2.cvtColor(aligned_rgb, cv2.COLOR_RGB2BGR)
+
     # `get_feat` puede devolver shape (1, D) o (D,) según implementación.
     # `flatten()` los unifica a (D,) sin copiar si el array ya es contiguo.
-    emb = rec_model.get_feat(aligned_rgb).flatten()
+    emb = rec_model.get_feat(aligned_bgr).flatten()
 
     # Forzamos float32 explícito para mantener invariante de dtype con
     # el resto del paquete (`detector.py` también guarda embeddings float32).

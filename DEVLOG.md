@@ -11,6 +11,26 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
+### `[hash pendiente]` · Sesión de diseño stack web + snapshot v0.1 + spike Track 2a (con bugfix latente del motor)
+
+- **Diseño arquitectónico del stack web público**: tras una sesión de discusión con el usuario, plan revisado a **2 tracks paralelos con arquitectura híbrida** (cliente-pesado / server-liviano):
+  - Track 1: vitrina equipos estática (JSON pre-calculado offline).
+  - Track 2a: comparador anónimo 100% en browser (inference con ONNX Runtime Web + MediaPipe Tasks for Web; imagen nunca sale del browser).
+  - Track 2b: refinamiento server-side opt-in para registrados.
+- **Snapshot inmutable versionado**: `_meta/arquitectura_web/v0.1_2026-05-20_arquitectura_web.md` (+ PDF generado con pandoc+Chrome headless). Patrón nuevo: doc vivo (`ARQUITECTURA.md` §5) apunta a snapshot inmutable; versiones futuras se crean al lado sin editar las viejas. Excepción al gitignore `*.pdf`: `!_meta/**/*.pdf` para incluir snapshots PDF en el repo.
+- **ARQUITECTURA.md §5 reescrita**: resumen del diseño vigente + estado de W1–W8 (3 cerradas, 1 resuelta vía arquitectura, 1 parcial, 3 diferidas a Track 2b), link al snapshot detallado.
+- **Spike Track 2a — paridad ONNX Runtime Web vs Python**: `scripts/verify_onnx_web_parity.py` (ID `PHYLOFACE_SPIKE_001 v1.0`) genera fixture (imagen alineada 112×112, tensor pre-procesado, embedding de referencia, metadata con criterio de éxito). Cliente Vite + React + TypeScript en `client/` carga el modelo ONNX en el browser (vía `onnxruntime-web`, backend WebGPU/WASM), corre inference y compara con el reference embedding.
+  - **Path A** (tensor JSON → modelo): `cosine = 1.000000`, `max|diff| = 2.86e-6`, infer ~526ms. **PASS perfecto**. El modelo ONNX corre en el browser produciendo embeddings bit-idénticos a Python.
+  - **Path B** (PNG → preprocess JS → modelo): tras corregir un bug propio de mi código JS (canales invertidos por mala simetría con el bugfix Python), también `cosine = 1.0`. **PASS**.
+  - **Resultado**: plan híbrido v0.1 **confirmado viable**. Track 2a puede avanzar.
+- **BUGFIX latente del motor Python descubierto durante el spike**: `extract_embedding_from_aligned` en `core/embedder.py` pasaba `aligned_rgb` (RGB) a `get_feat`, que internamente hace `cv2.dnn.blobFromImages(..., swapRB=True)` asumiendo BGR. Resultado: modelo recibía BGR cuando esperaba RGB → embedding con canales invertidos vs entrenamiento. Bug existía desde el archivo experimental original (heredado por la migración del 19-20). Silencioso porque ambas caras del par sufrían la misma inversión y los rankings se preservaban. **Fix de 1 línea**: `cv2.cvtColor(aligned_rgb, COLOR_RGB2BGR)` antes de `get_feat`. Documentado en cabecera del módulo `embedder.py` con bloque `=== BUGFIX 2026-05-20 (Spike Track 2a) ===`. Implicancia: los scores numéricos del notebook de la sesión 7b635a5 quedan obsoletos (plots no cambian); el usuario optó por no re-correr el notebook ahora (lo hará al agregar features nuevas).
+- **Infraestructura del cliente** (`client/`):
+  - Vite 8 + React 19 + TypeScript template estándar.
+  - `onnxruntime-web` instalado.
+  - `client/public/models/` (174MB modelo onnx, gitignored).
+  - `client/public/spike_fixtures/` (~820KB, gitignored — regenerables con el script Python).
+  - `npm run dev` levanta dev server en `localhost:5173`.
+
 ### `e1a6511` · T1 pasos 7–9: cierre de la Tarea #1 (viz/, notebook reescrito y archivo experimental archivado) `T1✓`
 
 - **Cierre de la Tarea #1** (migración `src/phyloface_experimental_functions.py` → `src/phyloface/`). 40/40 funciones migradas + notebook funcional + archivo original archivado en `_toReview/`.

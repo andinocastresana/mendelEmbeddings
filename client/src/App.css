@@ -1,0 +1,7 @@
+/* Reset del CSS default de Vite para no interferir con los estilos inline del spike. */
+#root {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}

@@ -6,6 +6,19 @@ data/
 __pycache__/
 *.pyc
 
+# Node / Vite (cliente)
+client/node_modules/
+client/dist/
+client/.vite/
+node_modules/
+dist/
+
+# Modelos pesados copiados al public del cliente (no commit, se bajan / copian localmente)
+client/public/models/
+
+# Fixtures del spike Track 2a (regenerables con `python3 scripts/verify_onnx_web_parity.py`)
+client/public/spike_fixtures/
+
 # Entornos
 .venv/
 env/
@@ -22,6 +35,10 @@ exports/
 *.jpeg
 *.pdf
 *.html
+
+# Excepción al gitignore *.pdf: PDFs de snapshots de arquitectura
+# (parte del patrón "doc vivo + snapshot inmutable versionado").
+!_meta/**/*.pdf
 *.parquet
 *.feather
 *.pkl

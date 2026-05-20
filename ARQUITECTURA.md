@@ -118,38 +118,50 @@ Misma evaluación corriendo en `buffalo_l`, `antelopev2`, otros — resultados t
 
 ---
 
-## 5. Stack web (público) ⏳
+## 5. Stack web (público) 🔄
 
-**Sesión 2026-05-20.** Se decide que la app va a montarse como **servicio web público** una vez terminada la Tarea #1 (migración del notebook al paquete). El paquete `phyloface` queda como motor agnóstico al transporte; el server lo consume como dependencia interna.
+**Última actualización**: 2026-05-20 (tarde). Tarea #1 cerrada ese mismo día; arrancamos sesión de diseño del stack web.
 
-### 5.1 Decisiones cerradas
+### 5.1 Snapshot detallado (versionado)
 
-| Tema                        | Decisión                                                                 |
-|-----------------------------|--------------------------------------------------------------------------|
-| Alcance                     | **Público / muchos usuarios** — auth real, persistencia seria, deploy cloud |
-| Server                      | **FastAPI** (Python) — expone el motor `phyloface` vía REST (probablemente + WS para resultados largos) |
-| Cliente                     | **Frontend separado tipo SPA** (no monolítico tipo Streamlit/Gradio)     |
-| Orden                       | **Terminar Tarea #1 primero**, después arrancar Tarea #25+ del stack web  |
-| Motor                       | `phyloface` queda 100% agnóstico al transporte (no importa FastAPI desde el motor) |
+El diseño completo vive como **snapshot inmutable versionado** en `_meta/arquitectura_web/`:
 
-### 5.2 Decisiones abiertas (W1–W8)
+- `v0.1_2026-05-20_arquitectura_web.md` (+ `.pdf` generado) — versión inicial post-Tarea #1.
 
-| ID  | Tema                                                              |
-|-----|-------------------------------------------------------------------|
-| W1  | Framework FE concreto: React / Vue / Svelte; SPA pura o SSR (Next/Nuxt/SvelteKit) |
-| W2  | Auth: OAuth (Google/GitHub) / email+password / magic links / mix  |
-| W3  | Persistencia: Postgres + Redis / SQLite / otra                    |
-| W4  | Procesamiento pesado: HTTP síncrono / cola asíncrona (Celery/arq/RQ) + polling o WebSocket |
-| W5  | Imágenes subidas: persistencia permanente / descarte tras procesar / anonimización (RGPD, ley 25.326 AR) |
-| W6  | Deploy: VPS (Hetzner/DigitalOcean) / PaaS (Render/Fly.io/Railway) / cloud serio (AWS/GCP) / Kubernetes |
-| W7  | Estructura repo: monorepo (server/, client/, src/phyloface/) / dos repos / tres repos |
-| W8  | Modelos en memoria: una instancia warm por worker / lazy / por request (con InsightFace init ~3-5s, casi seguro warm) |
+Cada ajuste de fondo crea una `vN.M_<fecha>_arquitectura_web.md` al lado; las versiones anteriores NO se editan retroactivamente. Esta sección de `ARQUITECTURA.md` solo lleva el resumen del diseño **vigente** + estado de decisiones.
 
-Estas decisiones se discuten cuando arranque la Tarea #25 (post Tarea #1). El detalle de cada una se documenta en este mismo `ARQUITECTURA.md` cuando se cierre.
+### 5.2 Resumen del diseño vigente (v0.1)
 
-### 5.3 Bloque de tareas web (sin abrir todavía)
+**Arquitectura híbrida cliente/servidor con 2 tracks paralelos**:
 
-Las tareas concretas del stack web entran en `TAREAS_PENDIENTES.md` recién cuando la Tarea #1 esté cerrada. Hoy queda anotado solo el rumbo, no las subtareas.
+| Track | Caso de uso | Stack | Privacidad |
+|-------|-------------|-------|------------|
+| **1. Vitrina equipos** | Comparar planteles, viz tipo heatmap/dendrograma/boxplot. Datos curados por Diego. | Cliente Vite + React + JSON pre-calculado. Sin server, sin DB, sin auth. | Datos públicos (jugadores profesionales). |
+| **2a. Comparador anónimo** | Niño + padres. Inference **100% en browser** vía ONNX Runtime Web + MediaPipe Tasks for Web (mismo modelo `w600k_r50.onnx` que Python). | Cliente Vite + React + onnxruntime-web. Sin server. | Imágenes **nunca salen del browser**. |
+| **2b. Refinamiento server** | Registrados opt-in. Cliente envía embeddings ya calculados + imagen → server hace features avanzados (Nivel B regional, occlusion, calibración). | FastAPI + ARQ + Postgres + Redis. Auth managed (Clerk/Supabase). Storage S3-compatible. | Consentimiento explícito + retención máx 90 días + DELETE on demand. |
+
+### 5.3 Estado de decisiones (W1–W8)
+
+| # | Tema | Estado | Resolución |
+|---|------|--------|-----------|
+| W1 | Framework FE | ✅ Cerrada | React + Vite SPA pura |
+| W2 | Auth | ⏸ Diferida (Track 2b) | Clerk o Supabase Auth managed (OAuth + magic link) |
+| W3 | Persistencia | ⏸ Diferida (Track 2b) | Postgres (Neon) + Redis (Upstash). En el medio: IndexedDB local en cliente. |
+| W4 | Procesamiento pesado | ⏸ Diferida (Track 2b) | ARQ + WebSocket / polling |
+| W5 | Imágenes subidas | ✅ Resuelta vía arquitectura | Track 2a: nunca salen del browser. Track 2b: opt-in con consentimiento. |
+| W6 | Hosting / deploy | 🟡 Parcial | Hosting estático (CF Pages / Netlify / GH Pages, sin decidir aún) para cliente. Fly.io para server cuando entre Track 2b. |
+| W7 | Estructura repo | ✅ Cerrada | Monorepo: `client/`, `scripts/`, `src/phyloface/`, `server/` |
+| W8 | Modelos en memoria | ⏸ Diferida (Track 2b) | Warm pool, una instancia del modelo por worker |
+
+### 5.4 Próximo paso inmediato
+
+**Sesión siguiente**: spike de viabilidad del Track 2a — verificar que ONNX Runtime Web carga `w600k_r50.onnx` en el browser y produce embeddings cuasi bit-idénticos a Python. Si falla, todo el plan híbrido se cae y hay que ir a una v0.2 con plan revisado.
+
+Detalle, riesgos identificados, glosario y plan completo → ver `_meta/arquitectura_web/v0.1_2026-05-20_arquitectura_web.md`.
+
+### 5.5 Tareas web en `TAREAS_PENDIENTES.md`
+
+Se crean **a medida** que se necesitan, no como bloque grande adelantado. Esto evita que tareas planificadas hoy queden obsoletas si el spike de v0.1 obliga a una v0.2.
 
 ---
 
