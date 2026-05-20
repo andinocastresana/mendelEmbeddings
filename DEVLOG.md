@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
-### `[hash pendiente]` · Sesión de diseño stack web + snapshot v0.1 + spike Track 2a (con bugfix latente del motor)
+### `de8b1a2` · Sesión de diseño stack web + snapshot v0.1 + spike Track 2a (con bugfix latente del motor)
 
 - **Diseño arquitectónico del stack web público**: tras una sesión de discusión con el usuario, plan revisado a **2 tracks paralelos con arquitectura híbrida** (cliente-pesado / server-liviano):
   - Track 1: vitrina equipos estática (JSON pre-calculado offline).
