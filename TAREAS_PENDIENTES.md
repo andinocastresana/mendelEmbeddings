@@ -13,7 +13,6 @@ Los códigos de área (`M1.4`, `M2.1`, etc.) refieren a los bloques numerados en
 
 | #  | Descripción | Área | Estado | Creado | Actualizado |
 |----|-------------|------|--------|--------|-------------|
-| 1  | Migrar funciones del notebook experimental (`src/phyloface_experimental_functions.py`) al paquete `src/phyloface/` — separar en `regions/`, `landmarks/`, `comparator_regional.py` según corresponda | M1.3, M1.4, M1.5 | pendiente | 2026-05-19 | 2026-05-19 |
 | 2  | Formalizar la **lista canónica de regiones** (nombres, landmarks fuente, polígonos) como contrato del motor — documentar en `phyloface/regions/canonical.py` o YAML de config | M1.4 | pendiente | 2026-05-19 | 2026-05-19 |
 | 3  | Anotar qué fue "regions v1" y por qué se descartó (deuda histórica para no repetir) | M1.4 | pendiente | 2026-05-19 | 2026-05-19 |
 | 4  | Implementar **features geométricas Nivel A** — distancias entre landmarks, proporciones, ángulos, simetrías | M1.5 | pendiente | 2026-05-19 | 2026-05-19 |
@@ -40,4 +39,13 @@ Los códigos de área (`M1.4`, `M2.1`, etc.) refieren a los bloques numerados en
 
 ## Completadas
 
-_(ninguna por ahora)_
+| #  | Descripción | Área | Estado | Creado | Cerrado |
+|----|-------------|------|--------|--------|---------|
+| 1  | Migrar funciones del notebook experimental (`src/phyloface_experimental_functions.py`) al paquete `src/phyloface/` — separar en `regions/`, `landmarks/`, `comparator_regional.py` según corresponda | M1.3, M1.4, M1.5 | **hecha** | 2026-05-19 | 2026-05-20 |
+
+Notas sobre el cierre de Tarea #1 (ver `_meta/MIGRACION_TAREA1.md` para detalle por sub-paso):
+- 40/40 funciones migradas en 9 pasos. Cada sub-paso verificado con smoke test.
+- Notebook reescrito con imports nuevos, corre end-to-end con datos reales, 15 plots PNG validados.
+- Cambio funcional decidido durante la migración: `euclidean_distance` y `cosine_similarity` reemplazadas por las versiones del experimental que normalizan con `l2_normalize` (euclídea ahora en `[0, 2]` en vez de magnitud cruda). Sin impacto en código ya productivo: no había umbrales calibrados todavía (Tarea #6 los generará data-driven).
+- Archivo original archivado en `_toReview/phyloface_experimental_functions_20260520_110102.py` (no borrado).
+- Infraestructura extra agregada en paralelo: `tests/smoke/` (convención de smoke tests versionados), `.claude/settings.json` (allowlist commit-able), `_meta/MIGRACION_TAREA1.md` (tracker fino), `ARQUITECTURA.md` §5 (decisión de stack web público).

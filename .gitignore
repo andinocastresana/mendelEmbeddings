@@ -27,3 +27,8 @@ exports/
 *.pkl
 *.joblib
 *.ipynb
+
+# Claude Code: config local del usuario (preferencias personales:
+# defaultMode, permisos extra que no se quieren compartir con el equipo).
+# .claude/settings.json SÍ se commitea (allowlist compartido del proyecto).
+.claude/settings.local.json

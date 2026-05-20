@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rclone listremotes)",
+      "Bash(rclone lsjson *)",
+      "Bash(python3 tests/smoke/*)"
+    ]
+  }
+}

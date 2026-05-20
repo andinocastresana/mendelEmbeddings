@@ -11,6 +11,21 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-20
 
+### `[hash pendiente]` · T1 pasos 7–9: cierre de la Tarea #1 (viz/, notebook reescrito y archivo experimental archivado) `T1✓`
+
+- **Cierre de la Tarea #1** (migración `src/phyloface_experimental_functions.py` → `src/phyloface/`). 40/40 funciones migradas + notebook funcional + archivo original archivado en `_toReview/`.
+- **Paso 7**: subpaquete `src/phyloface/viz/` con 3 archivos nuevos (`detection.py`, `landmarks.py`, `regions.py`) — ID `PHYLOFACE_VIZ_001 v1.0`. 7 funciones de plotting migradas; `__init__.py` actualizado para re-exportar las nuevas + las 2 pre-existentes de `heatmap.py`. Primer smoke test como archivo versionado (`tests/smoke/test_paso_7_viz.py`, ID `PHYLOFACE_SMOKE_007 v1.0`) con backend `Agg`; convención documentada en `tests/smoke/README.md`.
+- **Paso 8**: `notebooks/phyloface_expeimental_test1.py` reescrito (ID `PHYLOFACE_NOTEBOOK_002 v2.0`). Imports actualizados al paquete migrado; backend `Agg`; carpeta de salida `data/output/notebook_runs_<TIMESTAMP>/` con helper `save_current(name)`. Corrida end-to-end con `fraternos_jovenes.jpg` + `fraternosChacabuco8.jpg` produjo 15 plots PNG (revisados visualmente por el usuario, OK). Resultados rect vs masked numéricamente consistentes con el experimental original; NaN esperados en `left_eye`/`right_eye` masked (heredado, documentado).
+- **Paso 9**: `src/phyloface_experimental_functions.py` movido con `git mv` a `_toReview/phyloface_experimental_functions_20260520_110102.py` (dentro del repo, Git lo trackea como rename → historia preservada). Sufijo de timestamp respeta la regla del proyecto.
+- **Infraestructura de fluidez** agregada en paralelo:
+  - `.claude/settings.json` (commit-able) con allowlist `Bash(rclone listremotes)`, `Bash(rclone lsjson *)`, `Bash(python3 tests/smoke/*)`.
+  - `.claude/settings.local.json` con `defaultMode: "acceptEdits"` (gitignoreado — preferencia personal).
+  - `.gitignore` extendido con `.claude/settings.local.json` (convención estándar de Claude Code).
+- **Updates de docs**:
+  - `TAREAS_PENDIENTES.md`: Tarea #1 movida a sección "Completadas" con notas de cierre.
+  - `ARQUITECTURA.md` §1.3, 1.4, 1.5: estados actualizados con referencias a los nuevos módulos del paquete y clarificación de qué falta para Nivel B "real" (Tarea #5).
+  - `_meta/MIGRACION_TAREA1.md`: pasos 7+8+9 marcados ✅, bitácora con detalle del cierre, sección de "Verificación al cierre" completa.
+
 ### `9586cf5` · T1 pasos 1–6: migración del notebook experimental al paquete `phyloface` (motor casi completo) `T1`
 
 - Avance de la **Tarea #1** (migración de `src/phyloface_experimental_functions.py` → `src/phyloface/`). 34/40 funciones migradas en 6 pasos verificados con smoke tests independientes. Pendientes: paso 7 (`viz/`), 8 (reescribir notebook), 9 (archivar el archivo experimental original).

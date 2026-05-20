@@ -29,19 +29,19 @@ Lectura RGB con `pathlib`, validaciones, normalización de formato. Implementado
 ### 1.2 Detección y alineación ✅
 InsightFace `buffalo_l` para detección + 5-puntos para alineación canónica del embedding global. Expansión configurable de bbox (`face_pad_x/y`). Implementado en `src/phyloface/core/detector.py` y notebooks.
 
-### 1.3 Landmarks densos ✅ *(en notebook, falta migrar a paquete)*
-**MediaPipe Face Mesh** (468 puntos 3D) como fuente primaria para regiones. Los landmarks de InsightFace (`landmark_2d_106`, `landmark_3d_68`) quedan reservados para alineación interna.
+### 1.3 Landmarks densos ✅
+**MediaPipe Face Mesh** (468 puntos 3D, 478 con `refine_landmarks`) como fuente primaria para regiones. Migrado al paquete en `phyloface.landmarks` (Tarea #1, Paso 2). Los landmarks de InsightFace (`landmark_2d_106`, `landmark_3d_68`) quedan reservados para alineación interna.
 
 ### 1.4 Segmentación por regiones 🔄
-- **Regiones rectangulares (v2)** ✅ — bboxes derivadas de landmarks.
-- **Regiones con máscara poligonal (v2 masked)** ✅ — máscaras precisas sobre polígonos faciales.
-- **Lista canónica de regiones** ⏳ — formalizar contrato: ojos izq/der, cejas, nariz, boca, mentón, frente, contorno.
-- *Deuda histórica*: anotar qué fue "v1" y por qué se descartó.
+- **Regiones rectangulares (v2)** ✅ — bboxes derivadas de landmarks. Migrado a `phyloface.regions.extract_rect` (Tarea #1, Paso 3).
+- **Regiones con máscara poligonal (v2 masked)** ✅ — máscaras precisas sobre polígonos faciales. Migrado a `phyloface.regions.extract_masked` (Tarea #1, Paso 4).
+- **Lista canónica de regiones** ⏳ — formalizar contrato: ojos izq/der, cejas, nariz, boca, mentón, frente, contorno. (Tarea #2, pendiente.)
+- *Deuda histórica*: anotar qué fue "v1" y por qué se descartó. (Tarea #3, pendiente.)
 
 ### 1.5 Embeddings
-- **Global** ✅ — vector 512D de `recognition (w600k_r50.onnx)`.
-- **Por región — Nivel B (visual)** 🔄 — re-aplicación del modelo de reconocimiento al crop/máscara. Esqueleto en `compare_regions_v2` / `compare_regions_v2_masked`; falta validar calidad del embedding parcial.
-- **Por región — Nivel A (geométrico)** ⏳ — distancias entre landmarks, proporciones, ángulos, simetrías. Aún no existe.
+- **Global** ✅ — vector 512D de `recognition (w600k_r50.onnx)`. Re-extracción sobre cara alineada migrada a `phyloface.core.embedder` (Tarea #1, Paso 6b).
+- **Por región — Nivel B (visual)** 🔄 — comparación visual por región disponible en `phyloface.comparator_regional` (Tarea #1, Paso 5) usando grayscale + z-score + coseno; aún NO re-aplicamos el modelo de reconocimiento al crop/máscara (eso es lo que falta para Nivel B "real"). (Tarea #5, pendiente.)
+- **Por región — Nivel A (geométrico)** ⏳ — distancias entre landmarks, proporciones, ángulos, simetrías. Aún no existe. (Tarea #4, pendiente.)
 
 ### 1.6 Métricas y calibración 🔄
 - Coseno (principal) + euclídea (control) ✅.
