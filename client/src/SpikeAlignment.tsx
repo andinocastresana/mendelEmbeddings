@@ -31,8 +31,21 @@
 // por velocidad; una implementación TS en flotante pura puede tener diferencias
 // de 1-2 sobre uint8 en píxeles de borde por redondeo. NO permite desvíos de
 // algoritmo (Umeyama o transformación de coords), solo ruido numérico.
+//
+// Refactor (post spike #003 PASS): los 4 helpers de alineación
+// (`estimateNormSimilarity`, `adjustMatrixForMargin`, `invertAffine`,
+// `warpAffineBilinearReplicate`) viven en `./lib/alignment.ts` para ser
+// reusados por el spike #004 (pipeline e2e) y la UI MVP futura. Este spike
+// los importa desde ahí. Sigue construyendo `dstScaled` manualmente a partir
+// del template que viene EN EL FIXTURE (no del lib), a propósito: así valida
+// Umeyama JS independientemente del template hardcoded en el cliente.
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  estimateNormSimilarity,
+  adjustMatrixForMargin,
+  warpAffineBilinearReplicate,
+} from './lib/alignment';
 
 // -----------------------------------------
 // Tipos del fixture
@@ -79,199 +92,6 @@ interface PathResult {
   matrixMaxAbsDiff?: number;
   // ImageData resultante para renderizar.
   imageData: ImageData;
-}
-
-// -----------------------------------------
-// Math: Umeyama 2D (similitud sin reflexión)
-// -----------------------------------------
-// Fuente: Umeyama 1991 reducido a 2D. Para puntos en el plano sin permitir
-// reflexión, la similitud (rotación + escala uniforme + traslación) se
-// puede resolver de forma cerrada SIN SVD:
-//
-//   c = Σ (src_dx * dst_dx + src_dy * dst_dy)   "alineación"
-//   s = Σ (src_dx * dst_dy - src_dy * dst_dx)   "rotación signed"
-//   var_src = Σ (src_dx² + src_dy²)
-//   norm = sqrt(c² + s²)
-//   scale = norm / var_src
-//   cos(θ) = c / norm,   sin(θ) = s / norm
-//   sR = scale * [[cos, -sin], [sin, cos]]
-//   t = mean_dst - sR @ mean_src
-//
-// Esto es exactamente lo que `skimage.transform.SimilarityTransform.estimate`
-// devuelve en 2D (y por ende lo que `face_align.estimate_norm` usa).
-function estimateNormSimilarity(
-  src: number[][], // n x 2
-  dst: number[][], // n x 2
-): number[][] {
-  if (src.length !== dst.length || src.length === 0) {
-    throw new Error(`Mismatched or empty src/dst (src=${src.length}, dst=${dst.length})`);
-  }
-  const n = src.length;
-
-  // Medias.
-  let mxSrc = 0, mySrc = 0, mxDst = 0, myDst = 0;
-  for (let i = 0; i < n; i++) {
-    mxSrc += src[i][0]; mySrc += src[i][1];
-    mxDst += dst[i][0]; myDst += dst[i][1];
-  }
-  mxSrc /= n; mySrc /= n; mxDst /= n; myDst /= n;
-
-  // Sumas.
-  let c = 0, s = 0, varSrc = 0;
-  for (let i = 0; i < n; i++) {
-    const sx = src[i][0] - mxSrc;
-    const sy = src[i][1] - mySrc;
-    const dx = dst[i][0] - mxDst;
-    const dy = dst[i][1] - myDst;
-    c += sx * dx + sy * dy;
-    s += sx * dy - sy * dx;
-    varSrc += sx * sx + sy * sy;
-  }
-
-  if (varSrc === 0) {
-    throw new Error('Degenerate src points (zero variance)');
-  }
-
-  const norm = Math.sqrt(c * c + s * s);
-  if (norm === 0) {
-    throw new Error('Degenerate dst alignment (zero rotation magnitude)');
-  }
-
-  const scale = norm / varSrc;
-  const cosT = c / norm;
-  const sinT = s / norm;
-
-  // sR (escala * rotación).
-  const a = scale * cosT;
-  const b = -scale * sinT;
-  const d = scale * sinT;
-  const e = scale * cosT;
-
-  // Traslación: t = mean_dst - sR @ mean_src.
-  const tx = mxDst - (a * mxSrc + b * mySrc);
-  const ty = myDst - (d * mxSrc + e * mySrc);
-
-  return [
-    [a, b, tx],
-    [d, e, ty],
-  ];
-}
-
-// -----------------------------------------
-// Ajuste de margen (lo que `align_face_from_record` hace post estimate_norm)
-// -----------------------------------------
-function adjustMatrixForMargin(M: number[][], imageSize: number, marginRatio: number): number[][] {
-  if (marginRatio === 0) return M.map(row => [...row]);
-  const scale = 1.0 - 2.0 * marginRatio;
-  const shift = (imageSize * (1.0 - scale)) / 2.0;
-  return [
-    [M[0][0] * scale, M[0][1] * scale, M[0][2] * scale + shift],
-    [M[1][0] * scale, M[1][1] * scale, M[1][2] * scale + shift],
-  ];
-}
-
-// -----------------------------------------
-// Inversa de matriz afín 2x3 (para warpAffine)
-// -----------------------------------------
-// cv2.warpAffine recibe M como transformación src → dst, pero internamente
-// invierte M y muestrea: para cada (xo, yo) de dst, calcula M^(-1)·(xo,yo,1)
-// y samplea src en esas coords (fraccionales) con bilinear.
-function invertAffine(M: number[][]): number[][] {
-  const [a, b, c] = M[0];
-  const [d, e, f] = M[1];
-  const det = a * e - b * d;
-  if (Math.abs(det) < 1e-12) {
-    throw new Error(`Singular affine matrix (det=${det})`);
-  }
-  const inv = 1.0 / det;
-  // Inversa de la parte lineal 2x2.
-  const ia = e * inv;
-  const ib = -b * inv;
-  const id = -d * inv;
-  const ie = a * inv;
-  // Traslación de la inversa: -inv(A) @ t.
-  const itx = -(ia * c + ib * f);
-  const ity = -(id * c + ie * f);
-  return [
-    [ia, ib, itx],
-    [id, ie, ity],
-  ];
-}
-
-// -----------------------------------------
-// warpAffine bilineal con BORDER_REPLICATE
-// -----------------------------------------
-// Emula `cv2.warpAffine(src, M, (Wout, Hout), borderMode=BORDER_REPLICATE)`
-// con la interpolación bilineal default de OpenCV (INTER_LINEAR).
-//
-// Diferencias esperadas vs cv2:
-// - cv2 hace interpolación con aritmética fixed-point (más rápida); acá vamos
-//   en float64 directo. Puede haber ±1 en uint8 por redondeo.
-// - cv2 usa `cvRound` (que es "banker's rounding" en algunas plataformas);
-//   acá usamos Math.round() (round half away from zero). Otra fuente de ±1.
-function warpAffineBilinearReplicate(
-  src: ImageData,
-  M: number[][],
-  Wout: number,
-  Hout: number,
-): ImageData {
-  const Wsrc = src.width;
-  const Hsrc = src.height;
-  const srcData = src.data; // Uint8ClampedArray RGBA
-  const Minv = invertAffine(M);
-  const [ia, ib, itx] = Minv[0];
-  const [id, ie, ity] = Minv[1];
-
-  const out = new ImageData(Wout, Hout);
-  const outData = out.data;
-
-  for (let yo = 0; yo < Hout; yo++) {
-    for (let xo = 0; xo < Wout; xo++) {
-      // Coordenadas en src.
-      const xs = ia * xo + ib * yo + itx;
-      const ys = id * xo + ie * yo + ity;
-
-      // Bilineal: 4 vecinos enteros + pesos fraccionales.
-      const x0 = Math.floor(xs);
-      const y0 = Math.floor(ys);
-      const x1 = x0 + 1;
-      const y1 = y0 + 1;
-      const fx = xs - x0;
-      const fy = ys - y0;
-
-      // BORDER_REPLICATE: clamp a [0, Wsrc-1] x [0, Hsrc-1].
-      const cx0 = x0 < 0 ? 0 : x0 >= Wsrc ? Wsrc - 1 : x0;
-      const cx1 = x1 < 0 ? 0 : x1 >= Wsrc ? Wsrc - 1 : x1;
-      const cy0 = y0 < 0 ? 0 : y0 >= Hsrc ? Hsrc - 1 : y0;
-      const cy1 = y1 < 0 ? 0 : y1 >= Hsrc ? Hsrc - 1 : y1;
-
-      // Offsets RGBA (stride = 4).
-      const o00 = (cy0 * Wsrc + cx0) * 4;
-      const o01 = (cy0 * Wsrc + cx1) * 4;
-      const o10 = (cy1 * Wsrc + cx0) * 4;
-      const o11 = (cy1 * Wsrc + cx1) * 4;
-      const oOut = (yo * Wout + xo) * 4;
-
-      // Interpola por canal (R, G, B). Alpha lo dejamos en 255 (cv2 trabaja en 3 canales).
-      const w00 = (1 - fx) * (1 - fy);
-      const w01 = fx * (1 - fy);
-      const w10 = (1 - fx) * fy;
-      const w11 = fx * fy;
-
-      for (let ch = 0; ch < 3; ch++) {
-        const v = srcData[o00 + ch] * w00
-                + srcData[o01 + ch] * w01
-                + srcData[o10 + ch] * w10
-                + srcData[o11 + ch] * w11;
-        // Redondeo + clamp a uint8.
-        const r = Math.round(v);
-        outData[oOut + ch] = r < 0 ? 0 : r > 255 ? 255 : r;
-      }
-      outData[oOut + 3] = 255;
-    }
-  }
-
-  return out;
 }
 
 // -----------------------------------------

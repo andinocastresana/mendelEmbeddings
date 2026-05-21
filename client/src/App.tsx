@@ -7,6 +7,7 @@
 //   - Spike ONNX        (PHYLOFACE_SPIKE_001): paridad ONNX Runtime Web vs Python
 //   - Spike MediaPipe   (PHYLOFACE_SPIKE_002): paridad MediaPipe Tasks for Web vs Python
 //   - Spike Alignment   (PHYLOFACE_SPIKE_003): paridad alineación canónica JS vs Python
+//   - Spike Detection   (PHYLOFACE_SPIKE_004): pipeline e2e (detect → align → embed) JS vs Python
 //
 // Cuando el Track 2a real arranque, este App.tsx será reemplazado por el
 // comparador real (subir 2 fotos, detectar, alinear, embedding, comparar).
@@ -17,11 +18,12 @@ import { useState } from 'react';
 import SpikeOnnx from './SpikeOnnx';
 import SpikeMediapipe from './SpikeMediapipe';
 import SpikeAlignment from './SpikeAlignment';
+import SpikeDetection from './SpikeDetection';
 
-type Tab = 'onnx' | 'mediapipe' | 'alignment';
+type Tab = 'onnx' | 'mediapipe' | 'alignment' | 'detection';
 
 function App() {
-  const [tab, setTab] = useState<Tab>('alignment');
+  const [tab, setTab] = useState<Tab>('detection');
 
   const tabStyle = (active: boolean) => ({
     padding: '10px 20px',
@@ -53,12 +55,16 @@ function App() {
         <div style={tabStyle(tab === 'alignment')} onClick={() => setTab('alignment')}>
           Spike alignment (warp 112×112)
         </div>
+        <div style={tabStyle(tab === 'detection')} onClick={() => setTab('detection')}>
+          Spike detección (e2e)
+        </div>
       </div>
 
       {/* Contenido */}
       {tab === 'onnx' && <SpikeOnnx />}
       {tab === 'mediapipe' && <SpikeMediapipe />}
       {tab === 'alignment' && <SpikeAlignment />}
+      {tab === 'detection' && <SpikeDetection />}
     </div>
   );
 }

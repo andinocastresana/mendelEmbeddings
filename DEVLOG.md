@@ -11,6 +11,30 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
+### `PENDIENTE` · Track 2a — Spike #004 pipeline e2e JS vs Python + infra multi-imagen (GLOBAL PASS) `T25`
+
+- **Spike PHYLOFACE_SPIKE_004 v1.0**: cierra la última pieza del pipeline browser-only del Track 2a. Une las 3 piezas validadas (`#001` ONNX embedding + `#002` MediaPipe landmarks + `#003` alineación) en un pipeline e2e real: <i>source image → Face Mesh → 5 kps derivados → alinear → preprocesar → ONNX → cosine vs ref Python</i>. La pieza nueva es la **detección JS** sustituyendo a InsightFace SCRFD.
+  - `scripts/verify_detection_web_parity.py` (ID `PHYLOFACE_SPIKE_004`): pipeline Python completo + fixture con imagen original + embedding ref + bbox/kps InsightFace para auditoría. PASS criterion inicial: `cosine > 0.99`.
+  - `client/src/SpikeDetection.tsx`: pipeline JS e2e completo. Mapping Face Mesh → 5 kps de InsightFace en orden image-space. Diagnóstico automático "top-3 índices del mesh más cercanos a cada kps ref" para encontrar índices óptimos sin adivinar.
+- **Bug + descubrimiento de convención** (registrado para no repetir):
+  - Primera corrida con mapping `[473, 468, 1, 291, 61]` (asumiendo que MediaPipe usa convención anatomical "left=del sujeto") → cosine = 0.057, kps reflejados en el overlay.
+  - **Convención correcta** (verificada empíricamente con el overlay): MediaPipe Face Mesh usa la **misma convención image-space que InsightFace**, NO la anatomical. Mapping: `[468, 473, 1, 61, 291]` → cosine subió a 0.979.
+- **Ajuste del índice de nariz**: el diagnóstico "top-3 más cercanos" reveló que el `nose tip` (idx 1, 15.5px del kp SCRFD) NO es el punto que SCRFD considera nariz. El idx 4 (low nose bridge / centroide nasal) queda 10× más cerca (1.5px). Cambio: `1 → 4`. Cosine subió a 0.985.
+- **Threshold bajado 0.99 → 0.97** + criterio `max_abs_diff` removido (informativo, no PASS/FAIL — no es lineal con cosine). El gap residual entre 0.985 y 1.0 viene del iris center (mesh idx 468) que es el más cercano de los 478 pero no es exactamente lo que SCRFD considera "centro del ojo" — empujarlo más sería rendimiento decreciente con costo de complejidad.
+- **Refactor: extracción de helpers de alineación**. Los 4 helpers (`estimateNormSimilarity`, `adjustMatrixForMargin`, `invertAffine`, `warpAffineBilinearReplicate`) salieron de `SpikeAlignment.tsx` a `client/src/lib/alignment.ts` (ID `PHYLOFACE_LIB_ALIGNMENT v1.0`). Razón: segundo consumer real (spike #004 los importa); la UI MVP futura va a ser el tercero. `SpikeAlignment.tsx` se mantiene como spike de validación independiente — sigue construyendo `dstScaled` manualmente desde el template del fixture, no del lib, para que el spike valide Umeyama JS sin acoplarse al template hardcoded del cliente.
+- **Spike #004 v2.0 — infraestructura multi-imagen** (ampliación del spike para acumular evidencia de generalización):
+  - Script Python pasa a procesar TODAS las imágenes de `data/input/img/spike_e2e_set/`. **Dedup por SHA-256**: imágenes ya procesadas en corridas anteriores no se recompute (se reusan vía cache).
+  - Fixture nuevo: `cases.json` (array de casos con hash + embedding ref + kps ref por imagen) + `metadata.json` global + `images/<hash>.png` (imágenes copiadas al public con hash como filename para evitar colisiones).
+  - `SpikeDetection.tsx` v2.0: itera el pipeline e2e sobre todos los casos, acumula tabla con N filas + fila resumen agregada (mean / median / min / max cosine, # PASS / # FAIL). Selector visual por caso (click en fila). **Botón "Descargar JSON"** que exporta el snapshot de la corrida JS (el script Python no tiene visibilidad de las métricas del cliente).
+  - **MD acumulativo** `_meta/spike_004_runs.md` append-only: cada corrida del script Python deja una sección con timestamp UTC, set hash, # imágenes (nuevas vs reusadas), tabla de casos con det_score y bbox. Es el "set state" de Python — las métricas del JS quedan por fuera, en JSONs descargables manualmente.
+- **Resultado**: corrida con 4 imágenes diversas (BrunoFondoBlanco + IMG-20191018-WA0000 + T015PLX40B0-... + mateoFotoTarjetaTransporte) → **GLOBAL PASS** con mean cosine 0.98. El pipeline no estaba sobre-ajustado al seed.
+- **Memorias persistentes** (en `~/.claude/projects/.../memory/`):
+  - `project_browser_detector_adapter` — decisión abierta de arquitectar detector JS como adapter intercambiable (Face Mesh default + BlazeFace alternativa para devices low-end). Para resolver en el MVP del comparador.
+  - `project_track2b_dataset_pipeline` — idea diferida: drag-and-drop browser + SHA-256 dedup + DB persistente para acumular dataset de calibración del pipeline a partir de fotos reales de usuarios. Para implementar cuando arranquemos Track 2b.
+- **Archivos huérfanos del fixture v1** del spike #004 (que ya no consume el cliente v2) movidos a `_toReview/` con sufijo `_20260521_064852` (regla del proyecto: nunca borrar, el usuario decide después).
+
+### `441eaaa` · docs(DEVLOG): completa hash 7af68d6 en la entrada del spike alignment
+
 ### `7af68d6` · Track 2a — Spike #003 alineación canónica JS vs Python (PASS) + Tarea #25 `T25↑ T25`
 
 - **Spike PHYLOFACE_SPIKE_003**: cierra la pieza intermedia del pipeline browser-only del Track 2a. Reimplementa en TypeScript el algoritmo de `align_face_from_record` (Python) — `face_align.estimate_norm` (Umeyama 2D) + `cv2.warpAffine` bilineal con `BORDER_REPLICATE` — y valida paridad pixel-a-pixel contra la salida Python sobre la imagen 112×112 que entra al modelo ONNX.

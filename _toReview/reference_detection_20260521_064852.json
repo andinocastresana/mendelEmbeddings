@@ -1,0 +1,44 @@
+{
+  "bbox_global": [
+    186,
+    146,
+    625,
+    860
+  ],
+  "image_size_wh": [
+    819,
+    892
+  ],
+  "kps_global": {
+    "shape": [
+      5,
+      2
+    ],
+    "dtype": "float32",
+    "values": [
+      [
+        325.38580322265625,
+        462.7673645019531
+      ],
+      [
+        469.7716064453125,
+        457.69232177734375
+      ],
+      [
+        395.67974853515625,
+        532.8501586914062
+      ],
+      [
+        347.1405334472656,
+        616.0405883789062
+      ],
+      [
+        459.4012756347656,
+        612.0963134765625
+      ]
+    ],
+    "order": "left_eye, right_eye, nose, left_mouth, right_mouth",
+    "convention": "left/right desde la perspectiva del observador (image-space), igual que InsightFace SCRFD. NO desde la perspectiva del sujeto."
+  },
+  "det_score": 0.8513846397399902
+}
