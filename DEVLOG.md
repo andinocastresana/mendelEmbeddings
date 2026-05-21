@@ -11,6 +11,22 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
+### `XXXXXXX` · Track 2a — Refactor: extracción del pipeline e2e browser a `lib/pipeline.ts` `T25`
+
+- **Refactor preparatorio del MVP comparador** (Tarea #25 subtarea (c)). El pipeline e2e browser-only que vivía inline en `SpikeDetection.tsx` (detect Face Mesh → 5 kps en orden InsightFace → align canónico 112×112 → preprocesar → ONNX → embedding) se extrae a un módulo nuevo `client/src/lib/pipeline.ts` (ID `PHYLOFACE_LIB_PIPELINE v1.0`) para que el comparador (próximo paso) y el spike de regresión consuman la misma pieza.
+  - **Exports** del nuevo lib:
+    - `MESH_INDICES_INSIGHTFACE_ORDER` — constante con los 5 índices del mesh validados en spike #004 (`[468, 473, 4, 61, 291]`).
+    - `cosineSimilarity(a, b)` — sobre `Float32Array`.
+    - `loadImage(url)` — devuelve `{ img: HTMLImageElement, imageData: ImageData }`. HTMLImage lo necesita MediaPipe; ImageData lo necesita el warpAffine.
+    - `imageDataToTensorRGB(imgData, mean=127.5, std=127.5)` — RGBA 112×112 → NCHW float32 normalizado.
+    - `initFaceLandmarker()` — FaceLandmarker IMAGE mode, 1 cara, GPU delegate, modelo desde CDN. Costoso: el caller debe instanciar una vez y reusar.
+    - `initOnnxSession(modelUrl='/models/w600k_r50.onnx')` — sesión con providers `['webgpu', 'wasm']`.
+    - **`computeEmbedding(img, imageData, landmarker, session)`** — pipeline e2e puro, devuelve `{ embedding: Float32Array, kps: number[][], timings: { detectMs, alignMs, preprocessMs, inferMs } }`. NO toca refs, fixtures, ni overlay — eso queda como responsabilidad del caller.
+- **`SpikeDetection.tsx` v2.0 → v2.1**: refactor para consumir el lib nuevo. De 618 a 506 líneas (−112). Se eliminan los helpers que se movieron al lib y los inits inline de MediaPipe + ONNX. `runOnePipeline` queda como wrapper delgado: `computeEmbedding` + comparación contra el embedding y kps de referencia del fixture multi-caso (kps distance, cosine, max_abs_diff). Tipos del fixture, métricas agregadas, tabla, overlay y descarga JSON sin cambios.
+- **Decisión de scope**: `runOnePipeline` antes hacía dos cosas mezcladas — pipeline e2e + comparación contra ref. Separadas porque la comparación contra ref es lógica del spike (solo tiene sentido cuando hay un embedding Python de referencia); el comparador real no compara contra refs, compara dos embeddings JS entre sí.
+- **Validación post-refactor**: `tsc -b` PASS (exit 0). ESLint reporta solo 2 warnings `catch (e: any)` preexistentes (mismo código que en HEAD). Dev server levantado, spike #004 ejecutado sobre el set de 4 imágenes → **GLOBAL PASS sin regresión** (mismo resultado que antes: mean cosine ~0.98, 4/4 PASS).
+- **Lo que queda**: crear `client/src/Comparator.tsx` (paso 4 del orden sugerido en `[[project-next-step-ui-mvp]]`) y agregar tab en `App.tsx`.
+
 ### `b3129af` · Track 2a — Spike #004 pipeline e2e JS vs Python + infra multi-imagen (GLOBAL PASS) `T25`
 
 - **Spike PHYLOFACE_SPIKE_004 v1.0**: cierra la última pieza del pipeline browser-only del Track 2a. Une las 3 piezas validadas (`#001` ONNX embedding + `#002` MediaPipe landmarks + `#003` alineación) en un pipeline e2e real: <i>source image → Face Mesh → 5 kps derivados → alinear → preprocesar → ONNX → cosine vs ref Python</i>. La pieza nueva es la **detección JS** sustituyendo a InsightFace SCRFD.

@@ -1,9 +1,16 @@
 // =========================================
 // ID: PHYLOFACE_SPIKE_004
-// VERSION: v2.0
+// VERSION: v2.1
 // =========================================
 // Componente del SPIKE Track 2a — paridad del pipeline e2e JS vs Python,
 // versión MULTI-IMAGEN.
+//
+// Cambio v2.0 -> v2.1 (refactor Tarea #25c):
+// - El pipeline e2e (detect → align → embed) se extrajo a `lib/pipeline.ts`
+//   (`computeEmbedding`) para que lo reuse la UI MVP del comparador. Acá
+//   solo queda la capa de comparación contra el embedding de referencia del
+//   fixture multi-caso, las métricas de paridad (kps distance, max_abs_diff,
+//   cosine) y la UI de tabla/overlay/download.
 //
 // Cambio v1 -> v2 (2026-05-21, sesión multi-imagen):
 // - Carga un fixture multi-caso (`cases.json`) en lugar de los 3 archivos
@@ -14,10 +21,6 @@
 // - Botón "Descargar JSON" para persistir el snapshot de la corrida si querés
 //   acumularlo manualmente (el script Python ya escribe el "set state" a
 //   `_meta/spike_004_runs.md`, pero NO las métricas JS — eso se exporta acá).
-//
-// El pipeline JS por caso sigue siendo exactamente el mismo que en v1:
-//   imagen → Face Mesh → 5 kps derivados (índices fijos del mesh) → alinear
-//   (lib/alignment.ts) → preprocesar → ONNX (w600k_r50) → cosine vs ref.
 //
 // =========================================
 // DECISIÓN ABIERTA — detector intercambiable
@@ -37,22 +40,13 @@
 // Memoria: project-track2b-dataset-pipeline.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import * as ort from 'onnxruntime-web';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import {
-  estimateNormSimilarity,
-  arcfaceDstTemplate,
-  warpAffineBilinearReplicate,
-} from './lib/alignment';
-
-// -----------------------------------------
-// Mapping Face Mesh → 5 kps de InsightFace (image-space).
-// Validado empíricamente en este spike (sesión 2026-05-21).
-// -----------------------------------------
-const MESH_INDICES_INSIGHTFACE_ORDER = [468, 473, 4, 61, 291] as const;
-// (Etiquetas de cada kps en orden InsightFace, por si en una iteración futura
-// queremos mostrar perKpDistance con nombre — hoy va por índice numérico.)
-// ['left_eye', 'right_eye', 'nose', 'left_mouth', 'right_mouth']
+  computeEmbedding,
+  cosineSimilarity,
+  initFaceLandmarker,
+  initOnnxSession,
+  loadImage,
+} from './lib/pipeline';
 
 // -----------------------------------------
 // Tipos del fixture multi-caso
@@ -119,19 +113,9 @@ interface CaseResult {
 }
 
 // -----------------------------------------
-// Helpers de math
+// Métricas de comparación específicas del spike (no pertenecen al pipeline
+// productivo; solo se usan acá contra refs Python).
 // -----------------------------------------
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length !== b.length) throw new Error('Length mismatch');
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
-}
-
 function maxAbsDiff(a: Float32Array, b: Float32Array): number {
   let m = 0;
   for (let i = 0; i < a.length; i++) {
@@ -164,101 +148,24 @@ function median(values: number[]): number {
 }
 
 // -----------------------------------------
-// Cargar PNG como ImageData + HTMLImageElement
-// -----------------------------------------
-async function loadImage(url: string): Promise<{ img: HTMLImageElement; imageData: ImageData }> {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = (e) => reject(new Error(`Failed to load ${url}: ${e}`));
-    img.src = url;
-  });
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Cannot get 2D context');
-  ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, img.width, img.height);
-  return { img, imageData };
-}
-
-function imageDataToTensorRGB(imgData: ImageData, mean: number, std: number): Float32Array {
-  const W = imgData.width;
-  const H = imgData.height;
-  if (W !== 112 || H !== 112) {
-    throw new Error(`Expected 112x112 ImageData, got ${W}x${H}`);
-  }
-  const rgba = imgData.data;
-  const out = new Float32Array(1 * 3 * 112 * 112);
-  const planeSize = 112 * 112;
-  for (let y = 0; y < 112; y++) {
-    for (let x = 0; x < 112; x++) {
-      const pxIdx = (y * 112 + x) * 4;
-      const outIdx = y * 112 + x;
-      out[0 * planeSize + outIdx] = (rgba[pxIdx + 0] - mean) / std;
-      out[1 * planeSize + outIdx] = (rgba[pxIdx + 1] - mean) / std;
-      out[2 * planeSize + outIdx] = (rgba[pxIdx + 2] - mean) / std;
-    }
-  }
-  return out;
-}
-
-// -----------------------------------------
-// Procesar un caso del set (pipeline e2e JS, devuelve CaseResult)
+// Procesar un caso del set: corre el pipeline e2e (lib/pipeline) y lo compara
+// contra el embedding+kps de referencia del fixture Python.
 // -----------------------------------------
 async function runOnePipeline(
   caseDoc: CaseDoc,
-  faceLandmarker: FaceLandmarker,
-  session: ort.InferenceSession,
+  faceLandmarker: Parameters<typeof computeEmbedding>[2],
+  session: Parameters<typeof computeEmbedding>[3],
   imagesBaseUrl: string,
 ): Promise<CaseResult> {
   const refEmb = new Float32Array(caseDoc.reference_embedding.values);
   const refKps = caseDoc.kps_global.values;
 
-  const loaded = await loadImage(`${imagesBaseUrl}/${caseDoc.public_filename}`);
-  const W = loaded.img.width;
-  const H = loaded.img.height;
+  const { img, imageData } = await loadImage(`${imagesBaseUrl}/${caseDoc.public_filename}`);
+  const { embedding: embJs, kps: kpsJs, timings } = await computeEmbedding(
+    img, imageData, faceLandmarker, session,
+  );
 
-  // Detect.
-  const tDet0 = performance.now();
-  const mpResult = faceLandmarker.detect(loaded.img);
-  const detectMs = performance.now() - tDet0;
-  if (mpResult.faceLandmarks.length === 0) {
-    throw new Error(`Face Mesh no detectó cara en ${caseDoc.source_filename}`);
-  }
-  const meshLandmarks = mpResult.faceLandmarks[0];
-
-  // 5 kps en orden InsightFace image-space.
-  const kpsJs: number[][] = MESH_INDICES_INSIGHTFACE_ORDER.map(idx => {
-    const lm = meshLandmarks[idx];
-    if (!lm) throw new Error(`Landmark ${idx} missing en mesh para ${caseDoc.source_filename}`);
-    return [lm.x * W, lm.y * H];
-  });
   const kpsDist = kpsDistances(kpsJs, refKps);
-
-  // Align.
-  const tAlign0 = performance.now();
-  const dst = arcfaceDstTemplate(112);
-  const M = estimateNormSimilarity(kpsJs, dst as number[][]);
-  const aligned = warpAffineBilinearReplicate(loaded.imageData, M, 112, 112);
-  const alignMs = performance.now() - tAlign0;
-
-  // Preprocess + infer.
-  const tPre0 = performance.now();
-  const tensorData = imageDataToTensorRGB(aligned, 127.5, 127.5);
-  const preprocessMs = performance.now() - tPre0;
-
-  const tInf0 = performance.now();
-  const inputName = session.inputNames[0];
-  const outputName = session.outputNames[0];
-  const tensor = new ort.Tensor('float32', tensorData, [1, 3, 112, 112]);
-  const outputs = await session.run({ [inputName]: tensor });
-  const inferMs = performance.now() - tInf0;
-  const embJs = new Float32Array(outputs[outputName].data as Float32Array);
-
-  // Compare.
   const cosine = cosineSimilarity(embJs, refEmb);
   const maxDiff = maxAbsDiff(embJs, refEmb);
 
@@ -272,10 +179,10 @@ async function runOnePipeline(
     meanKpsDistance: kpsDist.mean,
     maxKpsDistance: kpsDist.max,
     perKpDistance: kpsDist.perKp,
-    detectMs,
-    alignMs,
-    preprocessMs,
-    inferMs,
+    detectMs: timings.detectMs,
+    alignMs: timings.alignMs,
+    preprocessMs: timings.preprocessMs,
+    inferMs: timings.inferMs,
     passed: false, // se setea afuera con el threshold del metadata
     kpsJs,
     kpsRef: refKps,
@@ -321,29 +228,11 @@ function SpikeDetection() {
         log(`    regla global: ${meta.success_criteria_for_js_client.global_pass_rule}`);
 
         log('[2] Inicializando MediaPipe FaceLandmarker (1x para todos los casos)...');
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm',
-        );
-        const faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-            delegate: 'GPU',
-          },
-          runningMode: 'IMAGE',
-          numFaces: 1,
-          outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false,
-          minFaceDetectionConfidence: 0.5,
-          minFacePresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
+        const faceLandmarker = await initFaceLandmarker();
         if (cancelled) return;
 
         log('[3] Inicializando ONNX session (1x para todos los casos)...');
-        const session = await ort.InferenceSession.create('/models/w600k_r50.onnx', {
-          executionProviders: ['webgpu', 'wasm'],
-          graphOptimizationLevel: 'all',
-        });
+        const session = await initOnnxSession();
         if (cancelled) return;
 
         log(`[4] Iterando pipeline e2e sobre ${casesFixt.cases.length} caso(s)...`);
