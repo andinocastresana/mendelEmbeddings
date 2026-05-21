@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
-### `PENDIENTE` · Track 2a — Spike #004 pipeline e2e JS vs Python + infra multi-imagen (GLOBAL PASS) `T25`
+### `b3129af` · Track 2a — Spike #004 pipeline e2e JS vs Python + infra multi-imagen (GLOBAL PASS) `T25`
 
 - **Spike PHYLOFACE_SPIKE_004 v1.0**: cierra la última pieza del pipeline browser-only del Track 2a. Une las 3 piezas validadas (`#001` ONNX embedding + `#002` MediaPipe landmarks + `#003` alineación) en un pipeline e2e real: <i>source image → Face Mesh → 5 kps derivados → alinear → preprocesar → ONNX → cosine vs ref Python</i>. La pieza nueva es la **detección JS** sustituyendo a InsightFace SCRFD.
   - `scripts/verify_detection_web_parity.py` (ID `PHYLOFACE_SPIKE_004`): pipeline Python completo + fixture con imagen original + embedding ref + bbox/kps InsightFace para auditoría. PASS criterion inicial: `cosine > 0.99`.
