@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
-### `XXXXXXX` · Track 2a — Comparador 3-slot (Hijo/a vs adultos) MVP cerrado `T25✓ T26↑`
+### `387f8ac` · Track 2a — Comparador 3-slot (Hijo/a vs adultos) MVP cerrado `T25✓ T26↑`
 
 - **Cierra la subtarea (c) de la Tarea #25** y la tarea entera. Nueva página en el cliente: `client/src/Comparator.tsx` (ID `PHYLOFACE_COMPARATOR`), accesible como tab "Comparador (MVP)" (default activa) en `App.tsx` v1.0 → v1.1.
 - **Estructura de 3 slots** alineada con el caso primario del producto (niño vs progenitores, ver `TAREAS_PENDIENTES.md` Tarea #12 App primaria): slot izquierdo (adulto) · slot central (Hijo/a, fijo) · slot derecho (adulto). Los dos slots laterales tienen **dropdown de rol** con opciones `Padre, Madre, Hermano, Hermana, Tío, Tía, Abuelo, Abuela, Otro` (default Padre y Madre). Si elige "Otro", aparece input libre. El rol elegido se refleja en la etiqueta del slot y en los labels de los cards de resultado (ej. "Hijo/a ↔ Padre").
