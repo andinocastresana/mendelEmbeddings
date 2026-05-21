@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
-### `PENDIENTE` · Track 2a — Spike #003 alineación canónica JS vs Python (PASS) + Tarea #25 `T25↑ T25`
+### `7af68d6` · Track 2a — Spike #003 alineación canónica JS vs Python (PASS) + Tarea #25 `T25↑ T25`
 
 - **Spike PHYLOFACE_SPIKE_003**: cierra la pieza intermedia del pipeline browser-only del Track 2a. Reimplementa en TypeScript el algoritmo de `align_face_from_record` (Python) — `face_align.estimate_norm` (Umeyama 2D) + `cv2.warpAffine` bilineal con `BORDER_REPLICATE` — y valida paridad pixel-a-pixel contra la salida Python sobre la imagen 112×112 que entra al modelo ONNX.
   - `scripts/verify_alignment_web_parity.py` (ID `PHYLOFACE_SPIKE_003 v1.0`): genera fixture en `client/public/spike_fixtures_alignment/` con (a) `crop_rgb.png` como entrada al algoritmo, (b) `aligned_face_112.png` como referencia, (c) `landmarks.json` con los 5 kps en coordenadas locales del crop + template `arcface_dst` + matrices `M` y `M_adj`, (d) `metadata.json` con criterio. Sanity check Python interno (warpAffine manual vs `align_face_from_record`): `max_abs_diff=0` bit-a-bit.
