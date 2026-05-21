@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
-### `XXXXXXX` · Track 2a — Refactor: extracción del pipeline e2e browser a `lib/pipeline.ts` `T25`
+### `77c99d5` · Track 2a — Refactor: extracción del pipeline e2e browser a `lib/pipeline.ts` `T25`
 
 - **Refactor preparatorio del MVP comparador** (Tarea #25 subtarea (c)). El pipeline e2e browser-only que vivía inline en `SpikeDetection.tsx` (detect Face Mesh → 5 kps en orden InsightFace → align canónico 112×112 → preprocesar → ONNX → embedding) se extrae a un módulo nuevo `client/src/lib/pipeline.ts` (ID `PHYLOFACE_LIB_PIPELINE v1.0`) para que el comparador (próximo paso) y el spike de regresión consuman la misma pieza.
   - **Exports** del nuevo lib:
