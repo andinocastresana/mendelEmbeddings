@@ -11,6 +11,25 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-21
 
+### `XXXXXXX` · Track 2a — Comparador 3-slot (Hijo/a vs adultos) MVP cerrado `T25✓ T26↑`
+
+- **Cierra la subtarea (c) de la Tarea #25** y la tarea entera. Nueva página en el cliente: `client/src/Comparator.tsx` (ID `PHYLOFACE_COMPARATOR`), accesible como tab "Comparador (MVP)" (default activa) en `App.tsx` v1.0 → v1.1.
+- **Estructura de 3 slots** alineada con el caso primario del producto (niño vs progenitores, ver `TAREAS_PENDIENTES.md` Tarea #12 App primaria): slot izquierdo (adulto) · slot central (Hijo/a, fijo) · slot derecho (adulto). Los dos slots laterales tienen **dropdown de rol** con opciones `Padre, Madre, Hermano, Hermana, Tío, Tía, Abuelo, Abuela, Otro` (default Padre y Madre). Si elige "Otro", aparece input libre. El rol elegido se refleja en la etiqueta del slot y en los labels de los cards de resultado (ej. "Hijo/a ↔ Padre").
+- **Drag-and-drop por slot** (`onDragOver/onDragLeave/onDrop`). Cuando el slot está vacío, muestra zona dashed "arrastrá una imagen acá"; durante drag-over: highlight azul claro + borde dashed azul. Solo acepta `dataTransfer.files` (filesystem); no resuelve URLs externas — **intencional** para no romper la garantía de privacidad. Valida `file.type` que empiece con `image/`.
+- **Botón "✕ Quitar"** por slot, visible solo con imagen cargada. Limpia file + previewUrl (revoca el object URL) + result + error. Resetea el `<input type="file">` vía `useRef` porque el browser no permite setear `value=""` desde React (seguridad) — sin esto, el input mantendría el nombre del archivo viejo y no se podría re-seleccionar el mismo.
+- **Comparación flexible**: el botón Comparar se habilita con **2 o 3** slots con file. Reglas:
+  - Hijo/a + un adulto → 1 cosine (Hijo/a ↔ adulto).
+  - Hijo/a + ambos adultos → 2 cosines (Hijo/a ↔ P1 y Hijo/a ↔ P2).
+  - Ambos adultos sin Hijo/a → 1 cosine adulto ↔ adulto.
+  - Estado migrado de `cosineLeft/cosineRight` a `cosines: { label, value }[]` para soportar el caso de a 2 sin ramas condicionales redundantes.
+- **Pipeline reusado**: `Comparator` consume `lib/pipeline.ts` (extraído en `77c99d5`) — `loadImage`, `computeEmbedding`, `cosineSimilarity`, `initFaceLandmarker`, `initOnnxSession`. Init lazy de landmarker + sesión ONNX, **una sola vez por sesión** (refs + flag `initStatus`), porque cada init descarga modelos remotos y costó ~varios segundos en los spikes.
+- **Preview de las caras alineadas 112×112**: para mostrar qué se está comparando, `lib/pipeline.ts` v1.0 → v1.1 agrega `aligned: ImageData` al `PipelineOutput`. El spike #004 (`SpikeDetection.tsx`) lo ignora silenciosamente — backward-compatible. Render con `imageSmoothingEnabled=false` para escalar ×2 sin antialiasing.
+- **Cosine crudo, sin etiqueta semántica**: las cards muestran el cosine con nota explícita "no hay umbral calibrado todavía (Tarea #6 lo va a generar contra KinFaceW); estos son los valores crudos de similitud entre vectores 512-d". Evita que el usuario interprete cualquier número como "match" sin baseline.
+- **Privacy banner explícito** en el header: "Las imágenes nunca salen de tu navegador. No hay upload a servidor, no se guarda nada en disco". Coherente con el stack 100% client-side (MediaPipe WASM + ONNX WebGPU/WASM, blob URLs locales).
+- **Bug encontrado y arreglado durante el desarrollo**: dibujar el canvas alineado dentro del handler async fallaba silenciosamente — el canvas se monta condicionalmente al llegar `slot.result`, así que `ref.current` era null cuando se intentaba dibujar justo después del `setState`. Fix: tres `useEffect` separados (uno por slot) que observan el `result` y dibujan al próximo render. Effects separados (no uno solo con `[slots.X.result, slots.Y.result, slots.Z.result]`) para que `exhaustive-deps` no pida `slots` entero, lo cual dispararía el draw en cada drag-over.
+- **Validación**: `tsc --noEmit -p tsconfig.app.json` PASS · `eslint` clean (0 errors, 0 warnings) en los 3 archivos modificados. Validación visual a cargo del usuario en el dev server (no automatizable acá).
+- **Tarea #26 abierta** en `TAREAS_PENDIENTES.md` (`T26↑`): **Track 2b — Comparador con árbol genealógico (pedigree formal)**. Página separada del 3-slot. Cada persona admite max 1 padre + 1 madre. Persistencia IndexedDB local + export/import. Selección interactiva de qué dos personas comparar. Decisiones abiertas registradas en la fila de la tarea. Encaja con la idea diferida `[[project-track2b-dataset-pipeline]]` ampliada con el modelo pedigree.
+
 ### `77c99d5` · Track 2a — Refactor: extracción del pipeline e2e browser a `lib/pipeline.ts` `T25`
 
 - **Refactor preparatorio del MVP comparador** (Tarea #25 subtarea (c)). El pipeline e2e browser-only que vivía inline en `SpikeDetection.tsx` (detect Face Mesh → 5 kps en orden InsightFace → align canónico 112×112 → preprocesar → ONNX → embedding) se extrae a un módulo nuevo `client/src/lib/pipeline.ts` (ID `PHYLOFACE_LIB_PIPELINE v1.0`) para que el comparador (próximo paso) y el spike de regresión consuman la misma pieza.

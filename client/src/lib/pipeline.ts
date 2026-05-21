@@ -1,6 +1,12 @@
 // =========================================
 // ID: PHYLOFACE_LIB_PIPELINE
-// VERSION: v1.0
+// VERSION: v1.1
+// =========================================
+// Cambio v1.0 → v1.1 (Tarea #25c — UI MVP comparador):
+// - `PipelineOutput` ahora incluye `aligned: ImageData` (la cara warped a 112×112).
+//   Lo necesita el comparador para mostrar preview visual de qué se está
+//   comparando. El spike #004 lo ignora silenciosamente.
+//
 // =========================================
 // Pipeline browser-only de embedding facial: detect (Face Mesh) → 5 kps en
 // orden InsightFace → align canónico 112×112 (lib/alignment.ts) → preprocesar
@@ -171,6 +177,7 @@ export interface PipelineTimings {
 export interface PipelineOutput {
   embedding: Float32Array;       // 512-d, sin L2-normalize (cosineSimilarity normaliza)
   kps: number[][];                // 5×2 en image-space (px de la imagen original)
+  aligned: ImageData;             // cara warped a 112×112 RGBA (útil para preview)
   timings: PipelineTimings;
 }
 
@@ -229,6 +236,7 @@ export async function computeEmbedding(
   return {
     embedding,
     kps,
+    aligned,
     timings: { detectMs, alignMs, preprocessMs, inferMs },
   };
 }
