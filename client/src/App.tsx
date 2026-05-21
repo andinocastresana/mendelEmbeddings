@@ -3,23 +3,25 @@
 // VERSION: v1.0
 // =========================================
 // App principal del cliente Track 2a. Por ahora actúa como **router simple**
-// entre los dos spikes de viabilidad:
+// entre los spikes de viabilidad:
 //   - Spike ONNX        (PHYLOFACE_SPIKE_001): paridad ONNX Runtime Web vs Python
 //   - Spike MediaPipe   (PHYLOFACE_SPIKE_002): paridad MediaPipe Tasks for Web vs Python
+//   - Spike Alignment   (PHYLOFACE_SPIKE_003): paridad alineación canónica JS vs Python
 //
 // Cuando el Track 2a real arranque, este App.tsx será reemplazado por el
 // comparador real (subir 2 fotos, detectar, alinear, embedding, comparar).
-// Por ahora mantiene un toggle tipo tabs para validar las dos puntas
+// Por ahora mantiene un toggle tipo tabs para validar las puntas
 // independientes antes de unificarlas.
 
 import { useState } from 'react';
 import SpikeOnnx from './SpikeOnnx';
 import SpikeMediapipe from './SpikeMediapipe';
+import SpikeAlignment from './SpikeAlignment';
 
-type Tab = 'onnx' | 'mediapipe';
+type Tab = 'onnx' | 'mediapipe' | 'alignment';
 
 function App() {
-  const [tab, setTab] = useState<Tab>('mediapipe');
+  const [tab, setTab] = useState<Tab>('alignment');
 
   const tabStyle = (active: boolean) => ({
     padding: '10px 20px',
@@ -48,11 +50,15 @@ function App() {
         <div style={tabStyle(tab === 'mediapipe')} onClick={() => setTab('mediapipe')}>
           Spike MediaPipe (landmarks)
         </div>
+        <div style={tabStyle(tab === 'alignment')} onClick={() => setTab('alignment')}>
+          Spike alignment (warp 112×112)
+        </div>
       </div>
 
       {/* Contenido */}
       {tab === 'onnx' && <SpikeOnnx />}
       {tab === 'mediapipe' && <SpikeMediapipe />}
+      {tab === 'alignment' && <SpikeAlignment />}
     </div>
   );
 }

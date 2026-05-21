@@ -9,6 +9,24 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-21
+
+### `PENDIENTE` · Track 2a — Spike #003 alineación canónica JS vs Python (PASS) + Tarea #25 `T25↑ T25`
+
+- **Spike PHYLOFACE_SPIKE_003**: cierra la pieza intermedia del pipeline browser-only del Track 2a. Reimplementa en TypeScript el algoritmo de `align_face_from_record` (Python) — `face_align.estimate_norm` (Umeyama 2D) + `cv2.warpAffine` bilineal con `BORDER_REPLICATE` — y valida paridad pixel-a-pixel contra la salida Python sobre la imagen 112×112 que entra al modelo ONNX.
+  - `scripts/verify_alignment_web_parity.py` (ID `PHYLOFACE_SPIKE_003 v1.0`): genera fixture en `client/public/spike_fixtures_alignment/` con (a) `crop_rgb.png` como entrada al algoritmo, (b) `aligned_face_112.png` como referencia, (c) `landmarks.json` con los 5 kps en coordenadas locales del crop + template `arcface_dst` + matrices `M` y `M_adj`, (d) `metadata.json` con criterio. Sanity check Python interno (warpAffine manual vs `align_face_from_record`): `max_abs_diff=0` bit-a-bit.
+  - Cliente: `client/src/SpikeAlignment.tsx` (ID `PHYLOFACE_SPIKE_003 v1.0`) implementa:
+    - `estimateNormSimilarity` — Umeyama 2D cerrado (sin SVD), forma directa de la similitud sin reflexión usando sumas de `c = Σ(sx·dx+sy·dy)`, `s = Σ(sx·dy−sy·dx)`, `var_src = Σ‖src_d‖²`. Derivado del que usa skimage para 2D. Cero dependencias nuevas.
+    - `warpAffineBilinearReplicate` — invierte la matriz afín, recorre cada píxel destino, samplea 4 vecinos en src con clamp-to-edge y mezcla bilineal. Redondeo + clamp a uint8.
+  - Dos paths de verificación (mismo patrón que SPIKE_001): **easy** (usa M_adj del fixture, solo testea warpAffine JS) y **completo** (estima M en JS con Umeyama + warpAffine). Si easy pasa y completo falla, el bug está en Umeyama; si fallan ambos, en warpAffine.
+  - **Resultado**: PASS en ambos paths. `max |M_js − M_ref|` del orden de 1e-6 (ruido de float64). Diff visual amplificado ×10 prácticamente negra.
+  - Implicancia: el pipeline browser del Track 2a queda demostrado en sus 3 piezas técnicas (alignment ✅ + landmarks ✅ + embedding ✅). Falta detección de cara JS — se difiere a spike #004 separado para aislar variables.
+- **Refactor de App.tsx**: tercera tab "Spike alignment (warp 112×112)" agregada al router de tabs. Default cambiada a la nueva tab para que el spike abra directo.
+- **TAREAS_PENDIENTES.md**: alta de **Tarea #25** — "Track 2a — MVP comparador anónimo browser" — en estado `en progreso`. Es el paraguas del trabajo del frente web siguiendo el patrón "tareas web a medida" de `ARQUITECTURA.md` §5.5; no se planificó un bloque grande de tareas adelantado para no quedar obsoleto si algún spike obliga a una v0.2 del diseño.
+- **Decisión de alcance del spike #003** (registrada al inicio de sesión): este spike valida SOLO la alineación, asumiendo que el cliente JS recibe los 5 kps de InsightFace serializados desde el fixture. La detección JS + el mapeo de los 6 kps de MediaPipe Face Detector al orden de InsightFace queda para un spike #004 separado. Razón: aislar variables — si combináramos detección + alineación en un mismo experimento, un FAIL nos dejaría sin saber dónde está el bug.
+
+---
+
 ## 2026-05-20
 
 ### `5e1a642` · Track 2a — Spike MediaPipe Face Mesh JS vs Python (PASS) + setup del cliente con tabs `T2`

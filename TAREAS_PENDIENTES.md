@@ -36,6 +36,7 @@ Los códigos de área (`M1.4`, `M2.1`, etc.) refieren a los bloques numerados en
 | 22 | Smoke test mínimo del pipeline en `tests/` (detección + embedding + comparación) | Tests | pendiente | 2026-05-19 | 2026-05-19 |
 | 23 | Documentar uso de `sync_notebooks.sh` y `jupytext.toml` en el README | Docs | pendiente | 2026-05-19 | 2026-05-19 |
 | 24 | Documentar los submodelos de InsightFace (`det_10g`, `w600k_r50`, `landmark_*`, `genderage`) en `phyloface/core/models.py` o en el README | Docs | pendiente | 2026-05-19 | 2026-05-19 |
+| 25 | **Track 2a — MVP comparador anónimo browser**. Cerrar el pipeline cliente-only: spike #003 (alineación canónica JS — `estimate_norm` + `warpAffine` replicados en TS, paridad pixel-a-pixel con `align_face_from_record`) → integrar las 3 piezas (MediaPipe Face Detector JS para bbox+kps → alineación JS → embedding ONNX) → UI de subir 2 fotos + score coseno. Imágenes nunca salen del browser. | Web | en progreso | 2026-05-21 | 2026-05-21 |
 
 ## Completadas
 
