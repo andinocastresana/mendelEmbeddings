@@ -11,6 +11,40 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
+### `4541c7b` · scripts: heat-experiment automatizado del Track 2b (Playwright + sampler) `T26 T27`
+
+**Experimento reproducible de temperatura/CPU del cliente** disparado por la pregunta del usuario "podés correr vos todas estas evaluaciones?" tras el smoke manual de fases del paso 2. Convierte el protocolo manual de 7 fases en 1 comando que devuelve tabla agregada.
+
+**Artefactos:**
+
+- `scripts/heat-experiment.sh` (ID `PHYLO_HEAT_EXPERIMENT_BASH v1.0`): orquestador bash. Mata vite previo, arranca dev server en background, mide Phase 0 baseline (30s sin browser), lanza Playwright para Phases 1-6, samplea CPU%+temp_max cada 5s vía `vmstat 1 2` (CPU idle column) + `sensors -A | awk '/^Core/' | sort -g | tail -1` (max core temp), agrupa por fase con awk y reporta tabla resumen (avg/max por fase). Cleanup en trap EXIT que mata sampler + vite.
+- `client/scripts/heat-experiment.mjs` (ID `PHYLO_HEAT_EXPERIMENT_PLAYWRIGHT v1.0`): script Playwright en **modo headed** (no headless, para que WebGPU funcione + para validación visual). Abre el SPA, navega entre tabs, crea árbol/persona/foto, dispara comparación (esperando init de MediaPipe+ONNX, timeout hasta 120s), escribe nombre de fase actual a `.heat-experiment-current-phase.txt` antes de cada fase para que el sampler bash lo lea por muestra. Usa `getByRole` para selectores robustos. Flags `--enable-unsafe-webgpu --enable-features=Vulkan` para no caer a fallback CPU.
+- `@playwright/test` agregado como devDep del cliente. Chromium descargado a `~/.cache/ms-playwright/chromium-1223` (377 MB) + headless shell (260 MB). Reusable a futuro: cuando el Track 2b paso 5 implemente comparación on-demand, tests E2E directos.
+- `.gitignore` extendido: `client/.heat-experiment*` y patrón laxo `client/.dev-resources*` (cubre log + .prev del rotado).
+
+**Bug intermedio en la primera corrida** (`ERR_MODULE_NOT_FOUND` al importar `@playwright/test` desde el .mjs): module resolution de Node busca `node_modules` desde el path del archivo .mjs, no del cwd. El script estaba en `scripts/heat-experiment.mjs` pero el paquete en `client/node_modules/`. Fix: mover el .mjs a `client/scripts/heat-experiment.mjs`; el bash invoca con `cd client && node scripts/heat-experiment.mjs`.
+
+**Resultado del primer run válido** (5 muestras por fase, ~3 min totales):
+
+| Phase | CPU avg | CPU max | Temp avg | Temp max |
+|-------|---------|---------|----------|----------|
+| 0-baseline-no-browser | 1.4% | 4% | 49.4°C | 78°C ⚠️ residual |
+| 1-comparator-default-idle | 4.0% | 11% | 41.8°C | 42°C |
+| 2-genealogy-empty | 5.0% | 12% | 41.4°C | 42°C |
+| 3-genealogy-with-photo | 3.2% | 4% | 41.4°C | 42°C |
+| 4-comparator-after-compare | 5.2% | 12% | 52.4°C | **90°C** 🔥 |
+| 5-genealogy-after-gpu-init | 7.2% | 14% | 43.0°C | 48°C |
+| 6-tab-closed | 3.6% | 4% | 42.6°C | 44°C |
+
+**Conclusiones empíricas:**
+
+- ✅ **`GenealogyTree.tsx` no calienta por sí solo**: Phase 2 (5%/41.4°C) y Phase 3 (3.2%/41.4°C) prácticamente idénticos a Phase 1 (Comparador idle sin GPU init, 4%/41.8°C). La hipótesis intuitiva del usuario quedó falsada cuantitativamente.
+- 🔥 **Pico verificado de init MediaPipe+ONNX**: Phase 4 alcanza 90°C max y 52.4°C avg — explica el reporte original de calentamiento.
+- ⚠️ **Leak del Comparator validado**: Phase 5 (CPU avg 7.2%, temp avg 43°C) muestra elevación sistemática vs Phase 2 (5%, 41.4°C) — única diferencia entre ambas es si MediaPipe/ONNX se inicializaron antes. Confirma Tarea **#27** como bug real, no especulativo.
+- ⚠️ **Tab cerrado** (Phase 6, 42.6°C avg) no baja a baseline (~41.4°C de Phase 2). Cerrar pestaña en contexto Playwright no libera del todo.
+
+**Tooling persistente**: alias `heat-exp` agregado a `~/.bashrc` (junto con `monitor` y `dev-mon`); pointer en `~/.claude/CLAUDE.md` global; doc completa en `~/Proyectos/NOTAS_CONFIGURACION.md`. Episodio KG `_global` capturado: `2026-05-22-controlled-experiment-resolves-hypothesis-tension` — patrón meta-metodológico: ante 3+ hipótesis no resueltas sobre el mismo síntoma, parar y diseñar experimento controlado automatizado.
+
 ### `ecfaba1` · Track 2b — modelo + store IDB + UI lista MVP (pasos 1-2) y wrapper dev-monitored.sh `T26 T27↑`
 
 **Avanza la Tarea #26 (Track 2b — comparador con árbol genealógico) cerrando los pasos 1 y 2** del plan de 6 pasos definido al arrancar la tarea. Coexiste con el comparador 3-slot del Track 2a (tab nuevo, no reemplazo).
