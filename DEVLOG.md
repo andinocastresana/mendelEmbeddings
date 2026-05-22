@@ -9,6 +9,48 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-22
+
+### `ecfaba1` · Track 2b — modelo + store IDB + UI lista MVP (pasos 1-2) y wrapper dev-monitored.sh `T26 T27↑`
+
+**Avanza la Tarea #26 (Track 2b — comparador con árbol genealógico) cerrando los pasos 1 y 2** del plan de 6 pasos definido al arrancar la tarea. Coexiste con el comparador 3-slot del Track 2a (tab nuevo, no reemplazo).
+
+**Paso 1 — modelo y persistencia** (`client/src/lib/genealogy.ts` ID `PHYLOFACE_LIB_GENEALOGY v1.0` + `client/src/lib/treeStore.ts` ID `PHYLOFACE_LIB_TREESTORE v1.0`):
+
+- **Modelo de datos puro** sin deps del DOM ni IDB. Tipos: `Person` (treeId, name, birthYear?, fatherId/motherId nullable, photoSha256 nullable, createdAt), `Tree` (id, name, createdAt, updatedAt), `PhotoRecord` (sha256 como PK, blob, embedding `Float32Array|null`, width, height, createdAt). Constructores `newId()` (UUID v4 vía Web Crypto), `newTree`, `newPerson`.
+- **`sha256OfBlob(blob)`**: SHA-256 hex lowercase con SubtleCrypto. Disponible en `localhost` (contexto seguro) sin sudo.
+- **`wouldCreateCycle(persons, personId, candidateParentId)`**: valida que asignar `candidateParentId` como padre/madre de `personId` no introduzca ciclos — DFS por ancestros del candidato buscando si `personId` ya es ancestro. Devuelve `{ ok: true }` o `{ ok: false, cycle: [...] }` con el camino del ciclo para diagnóstico. Necesario porque pedigree formal es DAG y la UI permite reasignar padres.
+- **Decisión de diseño**: el embedding vive en `PhotoRecord` (indexado por sha256), no en `Person`. Si dos personas comparten foto, el embedding se computa una sola vez. Dedup natural sin ref-counting.
+- **Store IDB nativo** (sin deps tipo `idb`): DB `phyloface-genealogy` v1 con stores `trees` (keyPath `id`), `persons` (keyPath `id`, index `by-tree` sobre treeId), `photos` (keyPath `sha256`). API: `openDb` cacheada, `deleteDb` para reset, CRUD trees/persons, `putPhoto(blob)` que calcula sha256 + dedup + extrae width/height vía `createImageBitmap`, `setPhotoEmbedding(sha256, embedding)` para cachear lazy.
+- **`deletePerson` no toca refs colgadas**: las personas que tenían a la borrada como padre/madre quedan con `fatherId`/`motherId` apuntando a un id inexistente. Decisión conservadora — borrar en cascada podría destruir genealogía. La UI los maneja como "(borrado: ABC...)". `deleteTree` borra el árbol y sus personas pero NO las fotos (pueden compartirse entre árboles; GC manual queda para futuro).
+
+**Paso 2 — UI lista MVP** (`client/src/GenealogyTree.tsx` ID `PHYLOFACE_GENEALOGY_TREE v1.0` + tab en `client/src/App.tsx` v1.1 → v1.2):
+
+- **Sin SVG todavía** — el pedigree visual viene en el paso 4. Esta vista valida que la capa de persistencia funciona end-to-end con UI mínima: tabla con foto + nombre + dropdowns padre/madre + botón ✕.
+- **Toolbar de árbol**: selector de árbol activo (multi-tree soportado en el store, sólo uno activo en UI), botón borrar árbol, input + botón "+ Árbol". Árbol activo se persiste en `localStorage` con key `phyloface-genealogy-last-tree`.
+- **Toolbar de persona**: input + botón "+ Persona" (Enter dispara también).
+- **Tabla de personas**: foto (placeholder 64×64 clickeable que abre file picker; preview con `objectFit: cover`), nombre, dropdown padre, dropdown madre, botón borrar. Dropdowns se filtran a las otras personas del árbol; al asignar, se llama `wouldCreateCycle` y si rechaza, muestra mensaje rojo "Asignación rechazada: crearía un ciclo".
+- **Refs colgadas**: si una persona tiene `fatherId`/`motherId` apuntando a alguien borrado, el dropdown muestra "(borrado: ABC...)" en rojo, no rompe.
+- **Object URLs de fotos**: cacheados por sha256 en estado local, revocados en cleanup del effect (no leakea al desmontar o cambiar de árbol). Coherente con el patrón capturado en el KG el mismo día (`2026-05-22-react-cleanup-gpu-wasm-resources-or-leak`).
+- **Validación**: `tsc --noEmit -p tsconfig.app.json` PASS, smoke browser PASS (alta árbol/personas, asignación padres, foto, validación de ciclo, refresh persiste, ref colgada, borrado, refresh vuelve a estado vacío). Sigue el patrón "smoke browser obligatorio para UI changes" del Track 2a.
+
+**Detour de control de recursos** — disparado por reporte del usuario de calentamiento sostenido durante el smoke del paso 2. Diagnóstico: cerrar el browser entero bajó la temperatura instantáneamente, lo que probó que la fuente era el proceso GPU compartido del browser (otros tabs + posibles contextos acumulados), no `GenealogyTree.tsx` (no usa GPU). **Tres patrones capturados en el KG** en `~/Proyectos/0_code_(gitHub)/IA/memories/_meta/episodes/2026-05-22-*`: (a) calor del browser = GPU process compartido; (b) componentes React con recursos externos deben limpiar en useEffect; (c) sesiones tmux/screen/compose vestigiales engañan al re-attach por `has-session`.
+
+- **`scripts/dev-monitored.sh` (nuevo, ID `PHYLO_DEV_MONITORED v1.0`)**: wrapper de `npm run dev` con muestreo de CPU/temp cada 5s (configurable vía env), log a `.dev-resources.log` (gitignored), WARN inline cuando una métrica supera el umbral durante N muestras seguidas. Defaults: 80% / 80°C / 3 muestras / 5s. Colores ANSI sobre stderr para no contaminar stdout del dev server. Sampling locale-agnostic: `vmstat 1 2` para CPU% (columna idle), `sensors -A | awk '/^Core/ ...'` para temp_max. Sin sudo. Cleanup en trap EXIT que mata al sampler junto con el dev server.
+- **`.gitignore`**: agregado `client/.dev-resources.log`.
+- **Tarea #27 abierta** (`T27↑`): cleanup GPU/WASM en `Comparator.tsx` — `useEffect` con cleanup que llame `landmarkerRef.current?.close()` y `sessionRef.current?.release()` al desmontar. Bug latente capturado en el episodio `_global` `2026-05-22-react-cleanup-gpu-wasm-resources-or-leak`.
+
+**Artefactos fuera de este repo** (parte del mismo trabajo pero viven en `~/Proyectos/` o configs globales, no se versionan acá):
+
+- `~/Proyectos/scripts/monitor.sh` (nuevo, ID `PHYLO_MONITOR v1.1`): dashboard tmux cross-proyecto con 3 panes (`bpytop`, `nvtop` con sudo, `watch -n 2 sensors`). v1.1 incluye fix para sesiones vestigiales (verifica conteo de panes antes de re-attach; sino destruye y recrea) — patrón capturado en `2026-05-22-tmux-vestigial-session-deceives-reattach`.
+- `~/Proyectos/NOTAS_CONFIGURACION.md` (nuevo): doc compartida cross-proyecto sobre control de recursos durante desarrollo web (herramientas browser/sistema, patrones defensivos, verificación rápida del culpable, instrucciones de los scripts).
+- `~/.claude/CLAUDE.md` (sección agregada "Control de recursos durante desarrollo web/UI"): pointer a las herramientas + criterios de cuándo proponerlas en cualquier sesión.
+- `~/.bashrc` (aliases agregados): `monitor` (dashboard global) y `dev-mon` (wrapper desde la raíz del proyecto).
+
+**Instalación de paquetes (una vez)**: `sudo apt install bpytop intel-gpu-tools nvtop tmux`. `btop` (versión C++ más nueva) no está en apt de Debian 11 (sólo snap); `bpytop` es el predecesor del mismo autor en Python, drop-in para los scripts. Cuando se migre a Debian 12+ o se acepte snap, cambiar `bpytop → btop` en `~/Proyectos/scripts/monitor.sh`.
+
+**Próximo paso del plan #26**: paso 3 — `lib/treeLayout.ts` (función pura que asigna generaciones a cada persona y ordena dentro de cada generación; base para el SVG del paso 4).
+
 ## 2026-05-21
 
 ### `387f8ac` · Track 2a — Comparador 3-slot (Hijo/a vs adultos) MVP cerrado `T25✓ T26↑`
