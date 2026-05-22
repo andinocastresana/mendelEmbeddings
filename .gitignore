@@ -50,5 +50,7 @@ exports/
 # .claude/settings.json SÍ se commitea (allowlist compartido del proyecto).
 .claude/settings.local.json
 
-# Log del wrapper scripts/dev-monitored.sh (muestras de CPU/temp por segundo)
-client/.dev-resources.log
+# Logs del wrapper scripts/dev-monitored.sh y del experimento heat-experiment.sh
+# (muestras de CPU/temp; archivos temporales del experimento)
+client/.dev-resources*
+client/.heat-experiment*
