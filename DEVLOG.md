@@ -11,6 +11,26 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
+### `PENDING` · Track 2b paso 3 — `lib/treeLayout.ts` puro `T26`
+
+**Avanza la Tarea #26 cerrando el paso 3** del plan de 6 pasos. Función pura que toma `Person[]` (del modelo `lib/genealogy.ts`) y devuelve `Map<PersonId, { generation, indexInGen }>` — base para el render SVG del paso 4. Sin acoplamiento al DOM ni a IDB.
+
+**Algoritmo:**
+
+- **Generación** asignada por DFS recursiva con memoización. Padres ausentes (id `null`) o danglings (id que no está en el set por persona borrada) cuentan como `-1`, de modo que `max(parents) + 1` cae naturalmente en `0` cuando ningún padre es válido. Una persona con un padre válido en gen 2 y otro dangling termina en gen 3.
+- **Orden intra-generación**: estable por `createdAt` ASC, tiebreak por `id` ASC. Determinístico — dos invocaciones sobre el mismo input devuelven el mismo orden, necesario para que el render SVG no salte de posición entre re-renders. **No minimiza cruces de líneas**; eso queda para iteraciones posteriores si el grafo crece y se vuelve ilegible. Para MVP, orden estable es suficiente.
+- **Guard de ciclos defensivo**: `wouldCreateCycle` en `lib/genealogy.ts` ya los previene en la UI, pero datos importados desde JSON externo podrían colarse. El stack de visitando durante la recursión detecta ciclos y degrada los nodos involucrados sin loopear infinitamente. No es la mejor UX pero el comportamiento defensivo es mínimo.
+
+**Smoke test** — `/tmp/treeLayout-smoke.mjs` (réplica funcional inline para no depender de tsx; si la lógica del .ts cambia, regenerar). 6 casos: pedigree clásico de 3 generaciones, hermanos ordenados por `createdAt`, refs colgadas por padre/madre, ciclo defensivo (verifica que no loopee, no la corrección del layout — ese caso no debería darse vía UI), lista vacía, tiebreak por id con `createdAt` empate. **Todos PASS.**
+
+**Decisiones de diseño no obvias:**
+
+- API devuelve `Map`, no `Record<string, ...>` — keys arbitrarias, además es lo idiomático en TS para lookups dinámicos.
+- Generación NO se guarda en `Person` (decisión heredada de la cabecera de `lib/genealogy.ts`): state derivado del grafo, mantenerlo en sync con los parentIds requeriría invalidación en cada edit. Mucho más simple recomputarlo en el render — el set es chico, no hay performance constraint.
+- Si emerge la necesidad de iterar generación a generación (probable en el paso 4 para layout SVG), agregar `bucketByGeneration(persons, layout)` en una v1.1. YAGNI por ahora.
+
+**Próximo paso del plan #26**: paso 4 — reemplazar la tabla actual de `GenealogyTree.tsx` por un render SVG pedigree (cajas por persona dispuestas por generación + líneas de parentesco) con drag-and-drop foto sobre nodo, consumiendo `computeTreeLayout`.
+
 ### `2889329` · fix(Comparator+Spikes): cleanup GPU/WASM al desmontar `T27✓`
 
 **Cierra Tarea #27** (cleanup de recursos GPU/WASM en componentes React que cargan motores ML pesados). Bug latente detectado y validado cuantitativamente el mismo día por `heat-experiment.sh` (Phase 5 elevación sistemática vs Phase 2). Fix aplicado a los 4 componentes que inicializan `FaceLandmarker` y/o `ort.InferenceSession`.
