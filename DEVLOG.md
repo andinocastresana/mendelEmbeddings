@@ -11,6 +11,41 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
+### `PENDING` · Track 2b paso 4 — render SVG pedigree + drag-and-drop foto + panel detalle `T26`
+
+**Avanza la Tarea #26 cerrando el paso 4** del plan de 6 pasos. `GenealogyTree.tsx` v1.0 → v2.0: reemplaza la tabla plana de personas por un render SVG pedigree top-down, consumiendo `computeTreeLayout` del paso 3.
+
+**Cambios principales:**
+
+- **Render SVG**: cajas por persona dispuestas por generación (gen 0 arriba, +1 hacia abajo); cada caja ~120×140 px con foto/placeholder + nombre. Líneas de parentesco rectas del centro-bottom del padre/madre al centro-top del hijo (una por relación, pueden ser 2 si tiene ambos padres). Centrado dinámico de cada generación dentro del ancho máximo del árbol. Sin minimización de cruces — orden estable por `createdAt` ASC, suficiente para MVP.
+- **Selección por click**: click sobre el borde / nombre del nodo → selecciona (borde azul) → panel detalle aparece abajo. El área de la foto NO selecciona (intencional, stopPropagation): click sobre foto abre file picker. El panel detalle expone foto grande (180×180), dropdowns padre/madre con validación de aciclicidad, botón borrar persona, botón cerrar.
+- **Drag-and-drop foto sobre nodo SVG**: arrastrar imagen del filesystem sobre un nodo → highlight verde + borde dashed → al soltar, `putPhoto` con dedup por SHA-256. Handlers `onDragOver/onDragLeave/onDrop` en el `<g>` del nodo, con `preventDefault` para que el browser no navegue a la imagen. Click sobre el placeholder "+ foto" del nodo abre file picker como alternativa.
+- **Accesibilidad**: cada nodo SVG es un `<g role="button" aria-label={person.name}>`. Lectores de pantalla pueden navegar el árbol; selectores de tests estables; semánticamente correcto para SVG con contenido interactivo.
+- **Refs colgadas**: si una persona tiene `fatherId`/`motherId` apuntando a alguien borrado, aparece un ⚠ rojo en la esquina superior-derecha del nodo. El render SVG ignora la línea de parentesco hacia el parent inexistente (`computeTreeLayout` ya trata el dangling como gen=-1, así la persona huérfana sube de generación naturalmente). El panel detalle muestra "(borrado: XXXXXX…)" en rojo dentro del dropdown.
+
+**Detalles de implementación no obvios:**
+
+- **`<text>` con `title` prop no existe en SVG** (a diferencia de HTML). Para tooltip sobre el ⚠, child `<title>` element dentro del `<text>`. Bug atrapado por `tsc` en la primera iteración.
+- **`<input type="file">` dentro de SVG**: requiere `<foreignObject>` con dimensión mínima `1×1` y `overflow: visible`, sino el input no se renderiza ni acepta clicks programáticos.
+- **`useEffect` para deseleccionar al cambiar de árbol — eliminado**: la regla `react-hooks/set-state-in-effect` lo marca como antipatrón. Reemplazado por derivación: `selectedPerson` ya se computa con `find` y retorna `null` si el id no existe en el árbol actual (colisión de UUID v4 entre árboles es ~0).
+
+**Lo que se conservó v1.0 → v2.0:**
+
+- Toolbars de árbol y de "+ Persona" (idénticas).
+- Multi-tree en el store con una sola activa en UI; `LAST_TREE_KEY` en `localStorage`.
+- Object URLs de fotos cacheados por sha256 y revocados en cleanup (consistente con [[2026-05-22-react-cleanup-gpu-wasm-resources-or-leak]]).
+- Validación `wouldCreateCycle` antes de asignar padres; mensaje de error inline si rechaza.
+
+**Validación:**
+
+- `npx tsc -b --noEmit`: PASS.
+- `npx eslint`: 1 error preexistente (`reloadPersons` con `set-state-in-effect`, ya estaba en v1.0); 0 regresiones nuevas.
+- `npx vite build`: PASS (788 kB JS gzip 225 kB; warning del wasm de ONNX es esperado).
+- **Smoke browser automatizado con Playwright headless** (perfil temporal, no toca IDB del Chrome del usuario). 5 screenshots en `/tmp/smoke-tree-shots/` cubriendo: render plano 4 personas, panel post-click, layout dinámico 3 generaciones con líneas, foto cargada en nodo y panel, borrado de raíz → ⚠ y recompute de generaciones. **Todos PASS.** Bug del smoke (no de la app) documentado en `/tmp/smoke-tree-paso4.mjs`: `page.click()` de Playwright centra el click sobre el rect, y el centro cae sobre el área de la foto que stopPropaga (intencional); workaround vía `dispatchEvent` dirigido al rect específico. UX real del usuario es correcta (click sobre borde/nombre selecciona, click sobre foto abre picker).
+- **Smoke manual del usuario**: PASS (drag-and-drop incluido, no cubierto por el automatizado).
+
+**Próximo paso del plan #26**: paso 5 — comparación on-demand. Tras seleccionar P1 (un nodo), click sobre P2 dispara el cosine reusando `lib/pipeline.ts`. Requiere asegurar que la foto de ambos nodos esté cargada y tener embedding cacheado en `PhotoRecord` (paso 1 ya lo dejó preparado).
+
 ### `44b20e9` · Track 2b paso 3 — `lib/treeLayout.ts` puro `T26`
 
 **Avanza la Tarea #26 cerrando el paso 3** del plan de 6 pasos. Función pura que toma `Person[]` (del modelo `lib/genealogy.ts`) y devuelve `Map<PersonId, { generation, indexInGen }>` — base para el render SVG del paso 4. Sin acoplamiento al DOM ni a IDB.
