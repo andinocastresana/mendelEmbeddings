@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
-### `PENDING` · Track 2b paso 3 — `lib/treeLayout.ts` puro `T26`
+### `44b20e9` · Track 2b paso 3 — `lib/treeLayout.ts` puro `T26`
 
 **Avanza la Tarea #26 cerrando el paso 3** del plan de 6 pasos. Función pura que toma `Person[]` (del modelo `lib/genealogy.ts`) y devuelve `Map<PersonId, { generation, indexInGen }>` — base para el render SVG del paso 4. Sin acoplamiento al DOM ni a IDB.
 
