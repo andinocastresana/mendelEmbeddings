@@ -1,7 +1,12 @@
 // =========================================
 // ID: PHYLOFACE_SPIKE_001
-// VERSION: v1.0
+// VERSION: v1.1
 // =========================================
+// Cambio v1.0 → v1.1 (Tarea #27, bugfix calentamiento sostenido):
+// - Cleanup de la `InferenceSession` ONNX al desmontar. Sin esto, el contexto
+//   WebGPU/WASM persiste en el proceso GPU compartido del browser hasta
+//   refresh de página.
+//
 // Componente del SPIKE Track 2a — paridad JS/Python.
 //
 // Qué hace:
@@ -192,6 +197,8 @@ function SpikeOnnx() {
 
   useEffect(() => {
     let cancelled = false;
+    // Capturado para liberar en cleanup (Tarea #27).
+    let sessionInstance: ort.InferenceSession | null = null;
 
     (async () => {
       try {
@@ -226,6 +233,7 @@ function SpikeOnnx() {
           executionProviders: ['webgpu', 'wasm'],
           graphOptimizationLevel: 'all',
         });
+        sessionInstance = session;
         if (cancelled) return;
         const loadMs = performance.now() - t0;
         log(`    Modelo cargado en ${loadMs.toFixed(0)} ms.`);
@@ -310,7 +318,12 @@ function SpikeOnnx() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      const sess = sessionInstance;
+      sessionInstance = null;
+      if (sess) void sess.release().catch((e) => console.warn('[SpikeOnnx] session.release falló:', e));
+    };
   }, []);
 
   // -----------------------------------------

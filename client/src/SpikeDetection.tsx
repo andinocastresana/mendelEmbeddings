@@ -1,9 +1,15 @@
 // =========================================
 // ID: PHYLOFACE_SPIKE_004
-// VERSION: v2.1
+// VERSION: v2.2
 // =========================================
 // Componente del SPIKE Track 2a — paridad del pipeline e2e JS vs Python,
 // versión MULTI-IMAGEN.
+//
+// Cambio v2.1 → v2.2 (Tarea #27, bugfix calentamiento sostenido):
+// - Cleanup de `FaceLandmarker` y `InferenceSession` al desmontar el
+//   componente. Sin esto, ambos contextos (GPU del Face Mesh + WebGPU/WASM
+//   de ONNX) quedan vivos en el proceso GPU compartido del browser hasta
+//   refresh de página.
 //
 // Cambio v2.0 -> v2.1 (refactor Tarea #25c):
 // - El pipeline e2e (detect → align → embed) se extrajo a `lib/pipeline.ts`
@@ -40,6 +46,8 @@
 // Memoria: project-track2b-dataset-pipeline.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type * as ort from 'onnxruntime-web';
+import type { FaceLandmarker } from '@mediapipe/tasks-vision';
 import {
   computeEmbedding,
   cosineSimilarity,
@@ -211,6 +219,9 @@ function SpikeDetection() {
 
   useEffect(() => {
     let cancelled = false;
+    // Capturados para que el cleanup libere ambos motores (Tarea #27).
+    let landmarkerInstance: FaceLandmarker | null = null;
+    let sessionInstance: ort.InferenceSession | null = null;
 
     (async () => {
       try {
@@ -229,10 +240,12 @@ function SpikeDetection() {
 
         log('[2] Inicializando MediaPipe FaceLandmarker (1x para todos los casos)...');
         const faceLandmarker = await initFaceLandmarker();
+        landmarkerInstance = faceLandmarker;
         if (cancelled) return;
 
         log('[3] Inicializando ONNX session (1x para todos los casos)...');
         const session = await initOnnxSession();
+        sessionInstance = session;
         if (cancelled) return;
 
         log(`[4] Iterando pipeline e2e sobre ${casesFixt.cases.length} caso(s)...`);
@@ -284,7 +297,14 @@ function SpikeDetection() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      landmarkerInstance?.close();
+      landmarkerInstance = null;
+      const sess = sessionInstance;
+      sessionInstance = null;
+      if (sess) void sess.release().catch((e) => console.warn('[SpikeDetection] session.release falló:', e));
+    };
   }, []);
 
   // Métricas agregadas memoizadas.

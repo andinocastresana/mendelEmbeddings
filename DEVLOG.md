@@ -11,6 +11,41 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
+### `PENDING` · fix(Comparator+Spikes): cleanup GPU/WASM al desmontar `T27✓`
+
+**Cierra Tarea #27** (cleanup de recursos GPU/WASM en componentes React que cargan motores ML pesados). Bug latente detectado y validado cuantitativamente el mismo día por `heat-experiment.sh` (Phase 5 elevación sistemática vs Phase 2). Fix aplicado a los 4 componentes que inicializan `FaceLandmarker` y/o `ort.InferenceSession`.
+
+**Patrón aplicado:**
+
+- **`Comparator.tsx` v2.1 → v2.2**: agregado `useEffect([])` dedicado al cleanup que llama `landmarkerRef.current?.close()` y `void sessionRef.current?.release().catch(...)`. Los refs se anulan después. El cleanup lee los refs en tiempo de desmontaje (no captura el valor en el render).
+- **`SpikeMediapipe.tsx` v1.0 → v1.1**: captura `landmarkerInstance` en variable del scope del effect (antes del `if (cancelled) return` del IIFE async). El return del effect llama `.close()`. La asignación pre-cancel es necesaria para StrictMode dev (doble run) y para el caso de unmount in-flight: si la promesa de init resolvió pero el componente ya se desmontó, el cleanup tiene acceso al recurso.
+- **`SpikeOnnx.tsx` v1.0 → v1.1**: mismo patrón, `sessionInstance` capturada y liberada con `.release()`.
+- **`SpikeDetection.tsx` v2.1 → v2.2**: ambos motores capturados (`landmarkerInstance` + `sessionInstance`), liberados en el return.
+
+**Nota sobre `release()`**: `InferenceSession.release()` devuelve `Promise<void>`. Los cleanups de `useEffect` no aceptan `await`, así que se invoca como `void sess.release().catch((e) => console.warn(...))`. `FaceLandmarker.close()` es sincrónico (`(): void`).
+
+**Validación cuantitativa** — re-corrida de `heat-experiment.sh` post-fix (tarde 14:24) comparada con baseline pre-fix (07:58 del mismo día, preservada como `client/.heat-experiment-baseline-pre-task27.log`):
+
+| | Phase 2 (genealogy idle) | Phase 5 (genealogy con GPU init) | **Δ (5−2)** |
+|---|---|---|---|
+| Pre-fix temp_avg | 41.4°C | 43.0°C | **+1.6°C** (leak) |
+| Post-fix temp_avg | 52.4°C | 50.8°C | **−1.6°C** (cerrado) |
+| Pre-fix temp_max | 42°C | 48°C | **+6°C** |
+| Post-fix temp_max | 56°C | 52°C | **−4°C** |
+| Pre-fix CPU avg | 5.0% | 7.2% | +2.2pp |
+| Post-fix CPU avg | 15.6% | 17.0% | +1.4pp |
+
+Los valores absolutos son más altos en post-fix porque la corrida fue por la tarde (temperatura ambiente más alta) — la comparación válida es la **delta intra-corrida** Phase 5 vs Phase 2, que es lo que aísla el efecto del leak. La inversión del signo (+1.6 → −1.6) es la firma del fix funcionando: ahora Phase 5 está **por debajo** de Phase 2, no por encima.
+
+**Bonus visible**: pico de Phase 4 (init MediaPipe+ONNX) cayó de **90°C max** a **63°C max**. La transición Phase 4 → Phase 5 cambia de tab; al desmontar Comparator se libera la GPU antes de empezar a samplear Phase 5, y ese cambio se ve también en el pico de Phase 4 (menos cola térmica residual).
+
+**Verificaciones que pasaron:**
+
+- `npx tsc -b --noEmit` (typecheck) → sin errores.
+- `npx eslint` sobre los 4 archivos → 4 errores `@typescript-eslint/no-explicit-any`, todos pre-existentes en bloques `catch (e: any)` de los spikes; **0 regresiones nuevas** (verificado con `git stash` + lint baseline).
+
+**Episodio KG capturado**: `2026-05-22-signature-inversion-validates-fix_diego-lenovo-debian.md` (`_global`) — extiende el patrón "firma numérica como huella diagnóstica" ([[2026-05-20-numeric-signature-as-diagnostic-fingerprint]]) hacia la dirección inversa: la firma del bug también sirve como **criterio de validación cuantitativa de un fix**, no solo como diagnóstico inicial. Si la firma se invierte (no solo desaparece, sino que cambia de signo de forma simétrica), evidencia más fuerte de que el fix actuó sobre el mecanismo correcto, no sobre una variable ortogonal que coincidió.
+
 ### `4541c7b` · scripts: heat-experiment automatizado del Track 2b (Playwright + sampler) `T26 T27`
 
 **Experimento reproducible de temperatura/CPU del cliente** disparado por la pregunta del usuario "podés correr vos todas estas evaluaciones?" tras el smoke manual de fases del paso 2. Convierte el protocolo manual de 7 fases en 1 comando que devuelve tabla agregada.

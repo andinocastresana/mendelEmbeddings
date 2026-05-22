@@ -1,7 +1,12 @@
 // =========================================
 // ID: PHYLOFACE_SPIKE_002
-// VERSION: v1.0
+// VERSION: v1.1
 // =========================================
+// Cambio v1.0 → v1.1 (Tarea #27, bugfix calentamiento sostenido):
+// - Cleanup del `FaceLandmarker` al desmontar el componente. Sin esto, el
+//   contexto GPU del Face Mesh queda vivo en el proceso GPU compartido del
+//   browser hasta refresh de página.
+//
 // Componente del SPIKE menor — paridad MediaPipe Face Mesh JS vs Python.
 //
 // Qué hace:
@@ -90,6 +95,9 @@ function SpikeMediapipe() {
 
   useEffect(() => {
     let cancelled = false;
+    // Capturado para que el cleanup del effect pueda liberarlo aunque el
+    // unmount ocurra mientras el init aún está in-flight (Tarea #27).
+    let landmarkerInstance: FaceLandmarker | null = null;
 
     (async () => {
       try {
@@ -146,6 +154,9 @@ function SpikeMediapipe() {
           minFacePresenceConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
+        // Asignar a la captura ANTES del check de cancelled — si la promesa
+        // resolvió pero el desmontaje ya ocurrió, el cleanup la libera.
+        landmarkerInstance = faceLandmarker;
         const initMs = performance.now() - t0;
         if (cancelled) return;
         log(`    FaceLandmarker creado en ${initMs.toFixed(0)} ms.`);
@@ -219,7 +230,11 @@ function SpikeMediapipe() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      landmarkerInstance?.close();
+      landmarkerInstance = null;
+    };
   }, []);
 
   // -----------------------------------------

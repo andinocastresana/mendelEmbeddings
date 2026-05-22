@@ -1,7 +1,16 @@
 // =========================================
 // ID: PHYLOFACE_COMPARATOR
-// VERSION: v2.1
+// VERSION: v2.2
 // =========================================
+// Cambio v2.1 → v2.2 (Tarea #27, bugfix calentamiento sostenido):
+// - Cleanup explícito de los recursos GPU/WASM al desmontar el componente.
+//   `FaceLandmarker.close()` y `InferenceSession.release()` se invocan en el
+//   return de un `useEffect([])` dedicado. Sin esto, cambiar de tab (de
+//   "Comparador" a "Árbol" o "Spikes") deja el contexto GPU del Face Mesh y
+//   la sesión ONNX WebGPU/WASM vivos en el proceso GPU compartido del browser
+//   hasta refresh de página, contribuyendo al calentamiento medido en Phase 5
+//   del heat-experiment.sh vs Phase 2.
+//
 // Cambio v2.0 → v2.1:
 // - Botón "✕ Quitar" por slot para borrar la imagen cargada.
 // - Comparar acepta 2 slots con file (no obliga los 3). Reglas:
@@ -209,6 +218,22 @@ function Comparator() {
   useEffect(() => {
     if (rightResult) drawAligned(alignedCanvasRefs.current.right, rightResult.aligned);
   }, [rightResult]);
+
+  // ---------------------------------------
+  // Cleanup al desmontar: liberar GPU/WASM. Ver cabecera v2.2 (Tarea #27).
+  // El effect no depende de nada — el cleanup lee los refs en tiempo de
+  // desmontaje, no captura el valor en el render. Usamos `void` sobre
+  // release() porque devuelve Promise<void> y no podemos await en cleanup.
+  // ---------------------------------------
+  useEffect(() => {
+    return () => {
+      landmarkerRef.current?.close();
+      landmarkerRef.current = null;
+      const sess = sessionRef.current;
+      sessionRef.current = null;
+      if (sess) void sess.release().catch((e) => console.warn('[Comparator] session.release falló:', e));
+    };
+  }, []);
 
   // ---------------------------------------
   // Lazy init de landmarker + session. Una sola vez por sesión.
