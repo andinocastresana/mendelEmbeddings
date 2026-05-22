@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
-### `PENDING` · fix(Comparator+Spikes): cleanup GPU/WASM al desmontar `T27✓`
+### `2889329` · fix(Comparator+Spikes): cleanup GPU/WASM al desmontar `T27✓`
 
 **Cierra Tarea #27** (cleanup de recursos GPU/WASM en componentes React que cargan motores ML pesados). Bug latente detectado y validado cuantitativamente el mismo día por `heat-experiment.sh` (Phase 5 elevación sistemática vs Phase 2). Fix aplicado a los 4 componentes que inicializan `FaceLandmarker` y/o `ort.InferenceSession`.
 
