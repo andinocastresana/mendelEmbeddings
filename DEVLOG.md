@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-22
 
-### `PENDING` · Track 2b paso 4 — render SVG pedigree + drag-and-drop foto + panel detalle `T26`
+### `f56b500` · Track 2b paso 4 — render SVG pedigree + drag-and-drop foto + panel detalle `T26`
 
 **Avanza la Tarea #26 cerrando el paso 4** del plan de 6 pasos. `GenealogyTree.tsx` v1.0 → v2.0: reemplaza la tabla plana de personas por un render SVG pedigree top-down, consumiendo `computeTreeLayout` del paso 3.
 
