@@ -49,3 +49,6 @@ exports/
 # defaultMode, permisos extra que no se quieren compartir con el equipo).
 # .claude/settings.json SÍ se commitea (allowlist compartido del proyecto).
 .claude/settings.local.json
+
+# Log del wrapper scripts/dev-monitored.sh (muestras de CPU/temp por segundo)
+client/.dev-resources.log

@@ -1,14 +1,18 @@
 // =========================================
 // ID: PHYLOFACE_CLIENT_001
-// VERSION: v1.1
+// VERSION: v1.2
 // =========================================
-// App principal del cliente Track 2a. Router simple entre el comparador MVP
-// y los spikes de viabilidad que validaron cada pieza del pipeline:
-//   - Comparator        (PHYLOFACE_COMPARATOR): MVP — 2 fotos → cosine
+// App principal del cliente. Router simple entre:
+//   - Comparator        (PHYLOFACE_COMPARATOR): MVP Track 2a — 3 slots (P1 · Hijo · P2)
+//   - GenealogyTree     (PHYLOFACE_GENEALOGY_TREE): MVP Track 2b — árbol genealógico (Tarea #26)
 //   - Spike ONNX        (PHYLOFACE_SPIKE_001): paridad ONNX Runtime Web vs Python
 //   - Spike MediaPipe   (PHYLOFACE_SPIKE_002): paridad MediaPipe Tasks for Web vs Python
 //   - Spike Alignment   (PHYLOFACE_SPIKE_003): paridad alineación canónica JS vs Python
 //   - Spike Detection   (PHYLOFACE_SPIKE_004): pipeline e2e (detect → align → embed) JS vs Python
+//
+// Cambio v1.1 → v1.2 (Tarea #26 paso 2): sumar tab "Árbol genealógico" que
+// monta el MVP paso 2 (lista plana de personas + persistencia IDB). El SVG
+// del pedigree y la comparación on-demand llegan en pasos 4-5.
 //
 // Cambio v1.0 → v1.1: arranca el comparador anónimo (Tarea #25 subtarea c).
 // Los spikes quedan accesibles para reproducir las métricas de paridad y
@@ -16,12 +20,13 @@
 
 import { useState } from 'react';
 import Comparator from './Comparator';
+import GenealogyTree from './GenealogyTree';
 import SpikeOnnx from './SpikeOnnx';
 import SpikeMediapipe from './SpikeMediapipe';
 import SpikeAlignment from './SpikeAlignment';
 import SpikeDetection from './SpikeDetection';
 
-type Tab = 'comparator' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
+type Tab = 'comparator' | 'genealogy' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
 
 function App() {
   const [tab, setTab] = useState<Tab>('comparator');
@@ -50,6 +55,9 @@ function App() {
         <div style={tabStyle(tab === 'comparator')} onClick={() => setTab('comparator')}>
           Comparador (MVP)
         </div>
+        <div style={tabStyle(tab === 'genealogy')} onClick={() => setTab('genealogy')}>
+          Árbol genealógico
+        </div>
         <div style={tabStyle(tab === 'onnx')} onClick={() => setTab('onnx')}>
           Spike ONNX (embedding)
         </div>
@@ -66,6 +74,7 @@ function App() {
 
       {/* Contenido */}
       {tab === 'comparator' && <Comparator />}
+      {tab === 'genealogy' && <GenealogyTree />}
       {tab === 'onnx' && <SpikeOnnx />}
       {tab === 'mediapipe' && <SpikeMediapipe />}
       {tab === 'alignment' && <SpikeAlignment />}
