@@ -9,6 +9,53 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-23
+
+### `bac4fac` · Track 2b paso 5 — comparación on-demand entre 2 nodos del árbol (cosine + historial persistido) `T26`
+
+**Cierra el paso 5 del plan de la Tarea #26** (de 6 pasos). Extiende `GenealogyTree.tsx` con un modo comparación que computa el cosine ArcFace entre las fotos de dos personas del árbol, reusando `lib/pipeline.ts` (Face Mesh → align canónico 112×112 → ONNX w600k_r50), cacheando embeddings por SHA-256 en IndexedDB y persistiendo cada comparación como entrada del historial filtrado por treeId.
+
+**Decisiones de UX cerradas al arrancar el paso** (3 elegidas por el usuario, distintas a las que sugería el resume del 22):
+
+- **Trigger** = toggle global "Modo comparación" (no implícito al click ni botón en panel detalle). Mientras está ON, los clicks sobre nodos no abren detalle: 1er click setea P1, 2do click setea P2 y dispara el cómputo.
+- **UI del resultado** = panel "Comparación" *separado*, lado a lado con el `PersonDetailPanel` cuando ambos están activos. No expande el panel detalle ni es modal flotante.
+- **Persistencia** = comparaciones se persisten en IDB con schema propio (no efímero). Esto agregó scope no trivial al paso 5 (nuevo object store + UI de historial + concepto "stale" para refs con foto cambiada).
+
+**Cambios de código:**
+
+- **`lib/genealogy.ts` v1.0 → v1.1**: tipo `Comparison` + `newComparison(...)`. Snapshotea `p1Sha256` y `p2Sha256` al momento del cómputo: si después le cambian la foto a P1 o P2, el historial sigue reflejando *qué se comparó realmente*. La UI marca esas entradas como "stale".
+- **`lib/treeStore.ts` v1.0 → v1.1**: bump `DB_VERSION` 1 → 2; `onupgradeneeded` crea object store `comparisons` (keyPath `id`, índice `by-tree` sobre `treeId`) si no existe (idempotente: cubre upgrade desde v1 e instalación fresh). CRUD: `saveComparison`, `listComparisons(treeId)` filtra vía índice (mismo patrón que `listPersons`), `deleteComparison`.
+- **`GenealogyTree.tsx` v2.0 → v3.0**:
+  - Tercera toolbar con checkbox "Modo comparación" + mensaje de estado contextual ("→ click sobre un nodo para elegir P1" / "→ click sobre otro nodo para elegir P2 y comparar" / "✓ comparación lista. Click sobre otro nodo para reiniciar." / "⏳ computando embeddings…"). Fondo `#fff7e0` cuando ON, gris cuando OFF.
+  - Nodos del SVG: badge "P1"/"P2" en esquina superior izquierda con `<rect>` redondeado de color (azul `#0044cc` / verde `#0a8a3a`) + texto blanco. Borde del nodo y fondo coordinan con el color del rol. `aria-label` extendido a `${name} · P1` / `· P2` para selectores de tests + accesibilidad.
+  - `ComparisonPanel`: card lateral con borde naranja (`#c89000`, fondo `#fffaf0`) que contiene dos `ComparisonSlot` (foto 96×96 con borde del color del rol) + número grande monoespaciado del cosine en el medio, botón `↻ recompute` arriba a la derecha. Debajo, lista del historial (max-height 200px, scroll) con cada entrada: `Bruno ↔ Mateo · 0.2302 · hace seg · [✕]`. Refs colgadas → `(borrado)` en gris itálica. Cosine snapshot vs photoSha256 actual → `⚠ stale` con tooltip.
+  - `ensureEmbedding(sha256, force?)`: pipeline lazy + cacheado. Si `PhotoRecord.embedding != null` y `!force`, reusa; sino corre `computeEmbedding` y persiste con `setPhotoEmbedding`. `FaceLandmarker` + ONNX session se inicializan una sola vez por mount via refs (init es costoso — ~segundos por descarga de modelos desde CDN).
+  - `useEffect([])` con cleanup explícito que libera ambas refs al desmontar (`landmarker?.close()` + `void session?.release().catch`). Hereda la lección de Tarea #27 / episodio [[2026-05-22-react-cleanup-gpu-wasm-resources-or-leak]]. Sin esto, los recursos GPU/WASM persistirían en el proceso GPU compartido del browser hasta refresh.
+  - `data-testid="cosine-value"` sobre el número grande para facilitar el smoke headless.
+  - Reset de selección viva (P1/P2/cosine) al cambiar de árbol o apagar el toggle: hecho en handlers (`handleSelectTree`, `handleToggleComparisonMode`), no en un `useEffect` reactivo — cumple regla `react-hooks/set-state-in-effect`.
+- **`client/scripts/genealogy-paso5-smoke.mjs`**: smoke Playwright headless. Resetea IDB de runs previos, crea árbol "Familia Test", crea Bruno+Mateo, sube fotos vía `setInputFiles` sobre los `<input type="file">` que viven en `<foreignObject>` por nodo, activa modo comparación, dispara cómputo, recompute, reload, valida persistencia (historial = 2 entradas), borra una entrada y verifica que el conteo baja a 1.
+
+**Validación:**
+
+- `npx tsc --noEmit`: PASS.
+- `npx eslint`: 1 error preexistente (`reloadPersons` con `set-state-in-effect`, ya estaba en v2.0); 0 regresiones nuevas.
+- **Smoke headless** (`node scripts/genealogy-paso5-smoke.mjs`): PASS end-to-end.
+  - **cosine Bruno↔Mateo = `0.2302`** (caras humanas distintas, magnitud razonable).
+  - Determinístico tras `↻ recompute`: mismo valor `0.2302` en run-2.
+  - Tras reload + reactivar modo, historial muestra `Historial (2)` (cómputo inicial + recompute).
+  - Borrar entrada baja conteo a `Historial (1)`.
+  - Screenshots `/tmp/genealogy-p5-{01..07}-*.png` leídos visualmente: badges P1/P2 OK, panel comparación con fotos lado a lado OK, modo correctamente reseteado post-reload (selección viva descartada, historial recargado desde IDB).
+
+**Detalles de implementación no obvios:**
+
+- **`page.click()` de Playwright + `stopPropagation` intencional**: el smoke replica el workaround del paso 4 ([[2026-05-22-playwright-headless-plus-multimodal-llm-closes-ui-validation-loop]]). `.click()` centra el evento sobre el `<g>` interno de la foto, que hace `stopPropagation` (intencional del producto: click sobre foto = file picker, click sobre borde/nombre = seleccionar). Workaround vía `dispatchEvent` dirigido al `<rect>` background. **No** se toca el producto.
+- **Tabs son `<div onClick>`, no `<button>`**: el smoke usa `page.locator('div').filter({ hasText: /^Árbol genealógico$/ })` + espera al `h2:has-text("...")` del componente para asegurar que el componente está montado, no solo que el texto del tab existe.
+- **Script `.mjs` debe vivir bajo `client/`**: mismo bug del paso 4 con `heat-experiment.mjs` — Node.js no resuelve `@playwright/test` si el archivo está fuera del `node_modules` del cliente. Movido a `client/scripts/genealogy-paso5-smoke.mjs`.
+- **Reset de comparación al cambiar de árbol**: handler `handleSelectTree(id)` envuelve `setSelectedTreeId(id)` + `resetComparisonSelection()` + `setSelectedPersonId(null)`. Se aplica a las 3 entradas que cambian el árbol activo: dropdown, create-tree, delete-tree. El handler `handleToggleComparisonMode` también resetea P1/P2/cosine cuando va de ON → OFF.
+- **El cosine = 0.2302 entre Bruno y Mateo** es esperable: son dos niños distintos, no parientes; el embedding ArcFace está optimizado para identificación, no kinship — un valor positivo bajo es lo correcto. Cuando integremos KinFaceW (Tarea #17) tendremos un umbral data-driven contra el cual interpretarlo.
+
+**Estado del plan #26:** pasos 1+2+3+4+5 cerrados. **Próximo: paso 6** — export/import JSON+base64 del árbol completo (metadata + imágenes empaquetadas en base64). El tab `App.tsx` ya está integrado desde el paso 2; queda definir el wire format del export.
+
 ## 2026-05-22
 
 ### `f56b500` · Track 2b paso 4 — render SVG pedigree + drag-and-drop foto + panel detalle `T26`
