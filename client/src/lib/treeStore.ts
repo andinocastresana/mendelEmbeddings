@@ -1,7 +1,15 @@
 // =========================================
 // ID: PHYLOFACE_LIB_TREESTORE
-// VERSION: v1.1
+// VERSION: v1.2
 // =========================================
+// Cambio v1.1 → v1.2 (Tarea #26 paso 6 — export/import del árbol):
+// - Helper nuevo `importPhotoRecord(record)`: persiste un PhotoRecord COMPLETO
+//   (incluyendo embedding + width/height) dedupeando por sha256. A diferencia
+//   de `putPhoto(blob)` —que calcula dims y deja embedding null—, lo usa el
+//   importador para rehidratar fotos con su embedding cacheado ya resuelto.
+//   Si el sha256 ya existe NO sobrescribe (preserva el record local, que puede
+//   tener un embedding más reciente).
+//
 // Cambio v1.0 → v1.1 (Tarea #26 paso 5 — comparación on-demand):
 // - DB_VERSION bump 1 → 2. `onupgradeneeded` ahora también crea el store
 //   `comparisons` (keyPath: id, índice by-tree → treeId). Idempotente: el
@@ -248,6 +256,22 @@ export async function getPhoto(sha256: Sha256Hex): Promise<PhotoRecord | null> {
   const tx = db.transaction(STORE_PHOTOS, 'readonly');
   const result = await req<PhotoRecord | undefined>(tx.objectStore(STORE_PHOTOS).get(sha256));
   return result ?? null;
+}
+
+/**
+ * Persiste un PhotoRecord completo dedupeando por sha256 — usado al importar
+ * un árbol (lib/treeExport.ts) para rehidratar fotos con su embedding ya
+ * resuelto. Si la foto ya existe localmente NO la sobrescribe (el record local
+ * gana: puede tener un embedding más fresco que el del archivo importado).
+ * Devuelve true si insertó, false si ya existía.
+ */
+export async function importPhotoRecord(record: PhotoRecord): Promise<boolean> {
+  const existing = await getPhoto(record.sha256);
+  if (existing) return false;
+  const db = await openDb();
+  const tx = db.transaction(STORE_PHOTOS, 'readwrite');
+  await req(tx.objectStore(STORE_PHOTOS).put(record));
+  return true;
 }
 
 /**

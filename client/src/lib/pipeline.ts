@@ -1,7 +1,15 @@
 // =========================================
 // ID: PHYLOFACE_LIB_PIPELINE
-// VERSION: v1.1
+// VERSION: v1.2
 // =========================================
+// Cambio v1.1 → v1.2 (Tarea #26 paso 6 — export/import del árbol):
+// - `MODEL_VERSION`: identificador de la versión del modelo de embedding.
+//   Lo consume `lib/treeExport.ts` para etiquetar el export: los embeddings
+//   cacheados sólo se reusan al importar si la versión del archivo coincide
+//   con la del runtime actual; si no, se descartan y se recomputan lazy.
+//   Convención: si en el futuro se cambia el .onnx o el preprocess, bumpear
+//   este string para invalidar embeddings viejos.
+//
 // Cambio v1.0 → v1.1 (Tarea #25c — UI MVP comparador):
 // - `PipelineOutput` ahora incluye `aligned: ImageData` (la cara warped a 112×112).
 //   Lo necesita el comparador para mostrar preview visual de qué se está
@@ -61,6 +69,12 @@ export const MESH_INDICES_INSIGHTFACE_ORDER = [468, 473, 4, 61, 291] as const;
 const MODEL_INPUT_SIZE = 112;
 const MODEL_PIXEL_MEAN = 127.5;
 const MODEL_PIXEL_STD = 127.5;
+
+// Versión del modelo de embedding (modelo + preprocess). Embeddings cacheados
+// producidos con una versión distinta no son comparables; al importar un árbol
+// (lib/treeExport.ts) sólo se reusan si la versión del archivo coincide con
+// ésta. Bumpear si cambia el .onnx, el orden de kps, el align o la normalización.
+export const MODEL_VERSION = 'w600k_r50';
 
 // -----------------------------------------
 // Math

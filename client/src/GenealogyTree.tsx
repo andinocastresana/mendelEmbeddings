@@ -1,7 +1,17 @@
 // =========================================
 // ID: PHYLOFACE_GENEALOGY_TREE
-// VERSION: v3.0
+// VERSION: v3.1
 // =========================================
+// Cambio v3.0 → v3.1 (Tarea #26 paso 6 del plan — export/import del árbol):
+// - Dos botones en la toolbar de árbol: **⬇ Exportar** (baja el árbol activo a
+//   un JSON autocontenido — Tree+Persons+Photos en base64+Comparisons) y
+//   **⬆ Importar** (file picker → crea un árbol NUEVO con ids remapeados).
+//   Toda la lógica de serialización/rehidratación vive en `lib/treeExport.ts`;
+//   acá sólo va el cableado de UI (handlers + input file oculto + feedback).
+// - Estado `info` nuevo (caja verde) para feedback de éxito del import; el
+//   `error` existente cubre los fallos. Tras importar se recarga la lista de
+//   árboles y se selecciona el recién creado.
+//
 // Cambio v2.0 → v3.0 (Tarea #26 paso 5 del plan — comparación on-demand):
 // - **Toggle "Modo comparación"** en una toolbar nueva arriba del SVG.
 //   Mientras está ON, los clicks sobre nodos NO seleccionan para detalle:
@@ -92,6 +102,7 @@ import {
   setPhotoEmbedding,
 } from './lib/treeStore';
 import { computeTreeLayout } from './lib/treeLayout';
+import { downloadTreeExport, importTreeFromJson } from './lib/treeExport';
 import {
   computeEmbedding,
   cosineSimilarity,
@@ -121,6 +132,12 @@ export default function GenealogyTree() {
   const [newPersonName, setNewPersonName] = useState('');
   const [newTreeName, setNewTreeName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Feedback de éxito (caja verde) — hoy lo usa sólo el import. Efímero: se
+  // limpia al próximo error o al cerrarlo.
+  const [info, setInfo] = useState<string | null>(null);
+  // Input file oculto para ⬆ Importar (vive fuera del SVG, en el árbol de la
+  // toolbar). Se dispara con .click() desde el botón.
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<PersonId | null>(null);
   // Persona-target del drag-over actual (para highlight visual).
   const [dragOverPersonId, setDragOverPersonId] = useState<PersonId | null>(null);
@@ -433,6 +450,47 @@ export default function GenealogyTree() {
     }
   };
 
+  // ⬇ Exportar: baja el árbol activo a un JSON autocontenido.
+  const handleExport = async () => {
+    if (!selectedTreeId) return;
+    const tree = trees.find((t) => t.id === selectedTreeId);
+    try {
+      await downloadTreeExport(selectedTreeId, tree?.name ?? 'arbol');
+      setError(null);
+      setInfo(`Árbol "${tree?.name ?? ''}" exportado.`);
+    } catch (e) {
+      setInfo(null);
+      setError(`Exportando: ${(e as Error).message}`);
+    }
+  };
+
+  // ⬆ Importar: lee el JSON elegido y crea un árbol NUEVO (ids remapeados).
+  // Tras importar recarga la lista y selecciona el árbol recién creado.
+  const handleImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const result = await importTreeFromJson(text);
+      const all = await listTrees();
+      setTrees(all);
+      handleSelectTree(result.treeId);
+      setError(null);
+      const parts = [
+        `${result.personCount} persona${result.personCount === 1 ? '' : 's'}`,
+        `${result.photosInserted} foto${result.photosInserted === 1 ? '' : 's'}${result.photosDeduped > 0 ? ` (+${result.photosDeduped} ya existente${result.photosDeduped === 1 ? '' : 's'})` : ''}`,
+        `${result.comparisonCount} comparación${result.comparisonCount === 1 ? '' : 'es'}`,
+      ];
+      setInfo(
+        `Importado «${result.treeName}»: ${parts.join(', ')}.` +
+          (result.embeddingsDropped
+            ? ' Embeddings descartados por versión de modelo distinta — se recomputarán al comparar.'
+            : ''),
+      );
+    } catch (e) {
+      setInfo(null);
+      setError(`Importando: ${(e as Error).message}`);
+    }
+  };
+
   const handleCreatePerson = async () => {
     if (!selectedTreeId) {
       setError('Primero creá o seleccioná un árbol');
@@ -584,6 +642,23 @@ export default function GenealogyTree() {
         <button onClick={handleDeleteTree} disabled={!selectedTreeId}>
           ✕ Borrar árbol
         </button>
+        <button onClick={handleExport} disabled={!selectedTreeId} title="Bajar el árbol activo a un archivo JSON">
+          ⬇ Exportar
+        </button>
+        <button onClick={() => importInputRef.current?.click()} title="Importar un árbol desde un JSON (crea uno nuevo)">
+          ⬆ Importar
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleImportFile(f);
+            e.target.value = ''; // permite re-importar el mismo archivo
+          }}
+        />
         <span style={{ flex: 1 }} />
         <input
           type="text"
@@ -600,6 +675,13 @@ export default function GenealogyTree() {
       {error && (
         <div style={errorStyle}>
           {error} <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+
+      {/* Mensaje de éxito (import/export) */}
+      {info && (
+        <div style={infoStyle}>
+          {info} <button onClick={() => setInfo(null)}>×</button>
         </div>
       )}
 
@@ -1512,6 +1594,19 @@ const errorStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
+};
+
+const infoStyle: React.CSSProperties = {
+  padding: 10,
+  marginBottom: 12,
+  background: '#eaffea',
+  color: '#060',
+  border: '1px solid #bde5bd',
+  borderRadius: 4,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
 };
 
 const panelStyle: React.CSSProperties = {
