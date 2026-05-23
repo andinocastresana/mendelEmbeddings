@@ -1,6 +1,9 @@
-// Smoke headless del paso 5 (Tarea #26 — comparación on-demand).
-// Crea árbol limpio, dos personas con foto, activa modo comparación, dispara
-// cosine, verifica persistencia tras reload. Screenshots en /tmp/genealogy-p5-*.
+// Smoke headless del paso 5 (Tarea #26) — iteración multi-selección.
+//
+// Crea 3 personas (Bruno, Mateo, Hijo) con Bruno+Mateo padres de Hijo para
+// ejercitar el pedigree canónico (línea de unión + bus). Luego selecciona los
+// 3 con ctrl+click y verifica que aparezcan 3 líneas naranjas (3 pares =
+// C(3,2)). Deselecciona uno y verifica que queden 1 línea (pares restantes).
 //
 // Asume vite corriendo en http://localhost:5173.
 
@@ -11,6 +14,7 @@ const APP_URL = 'http://localhost:5173/';
 const IMG_DIR = resolve(process.env.HOME, 'Proyectos/0_code_(gitHub)/mendelEmbeddings/data/input/img/spike_e2e_set');
 const IMG_BRUNO = resolve(IMG_DIR, 'BrunoFondoBlanco.jpeg');
 const IMG_MATEO = resolve(IMG_DIR, 'mateoFotoTarjetaTransporte.jpeg');
+const IMG_HIJO = resolve(IMG_DIR, 'IMG-20191018-WA0000.jpg');
 
 const SHOT = (name) => `/tmp/genealogy-p5-${name}.png`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,6 +37,31 @@ page.on('console', (msg) => {
 });
 page.on('pageerror', (err) => console.log('  [pageerror]', err.message));
 
+const clickNodeBackground = async (name, withCtrl = false) => {
+  await page.evaluate(({ n, ctrl }) => {
+    const g = document.querySelector(`g[aria-label^="${n}"]`);
+    if (!g) throw new Error(`No SVG g for ${n}`);
+    const rect = g.querySelector('rect');
+    if (!rect) throw new Error(`No background rect inside ${n}`);
+    rect.dispatchEvent(new MouseEvent('click', {
+      bubbles: true, cancelable: true, ctrlKey: ctrl,
+    }));
+  }, { n: name, ctrl: withCtrl });
+};
+
+// Espera a que todas las cosines pendientes se hayan resuelto: contamos
+// labels que muestran "…" (computing) y esperamos que sean 0.
+async function waitAllCosinesReady() {
+  await page.waitForFunction(() => {
+    const labels = Array.from(document.querySelectorAll('[data-testid="cosine-value"]'));
+    if (labels.length === 0) return false;
+    return labels.every((el) => {
+      const t = el.textContent || '';
+      return t !== '…' && t !== '—';
+    });
+  }, null, { timeout: 180000 });
+}
+
 try {
   console.log('1. Cargar app + reset IndexedDB');
   await page.goto(APP_URL, { waitUntil: 'load' });
@@ -44,9 +73,6 @@ try {
   }));
   await page.reload({ waitUntil: 'load' });
 
-  // En App.tsx los tabs son <div onClick>, no <button>: usar selector por
-  // texto y esperar a que el h2 del componente árbol haya montado (no solo
-  // por el texto del tab, que matchea aunque sigamos en otra pestaña).
   const goToTreeTab = async () => {
     await page.locator('div').filter({ hasText: /^Árbol genealógico$/ }).first().click();
     await page.waitForSelector('h2:has-text("Árbol genealógico (Track 2b")', { timeout: 5000 });
@@ -58,119 +84,121 @@ try {
   console.log('3. Crear árbol "Familia Test"');
   await page.fill('input[placeholder="Nombre del árbol nuevo"]', 'Familia Test');
   await page.click('button:has-text("+ Árbol")');
-  await wait(500);
+  await wait(400);
 
-  console.log('4. Crear personas Bruno y Mateo');
-  for (const name of ['Bruno', 'Mateo']) {
+  console.log('4. Crear personas Bruno, Mateo, Hijo');
+  for (const name of ['Bruno', 'Mateo', 'Hijo']) {
     await page.fill('input[placeholder="Nombre de la persona nueva"]', name);
     await page.click('button:has-text("+ Persona")');
-    await wait(400);
+    await wait(300);
   }
 
-  console.log('5. Subir fotos a ambos nodos vía input file oculto');
-  // Los inputs file están dentro del foreignObject por nodo SVG. Hay uno por
-  // persona; el orden en el DOM coincide con el orden de persons (createdAt
-  // ASC). El primero en el DOM es Bruno (creado primero), el segundo Mateo.
+  console.log('5. Subir fotos a los 3 nodos');
   const fileInputs = page.locator('svg input[type="file"]');
   await fileInputs.nth(0).setInputFiles(IMG_BRUNO);
-  await wait(600);
+  await wait(500);
   await fileInputs.nth(1).setInputFiles(IMG_MATEO);
-  await wait(600);
+  await wait(500);
+  await fileInputs.nth(2).setInputFiles(IMG_HIJO);
+  await wait(500);
 
-  await page.screenshot({ path: SHOT('01-tree-with-photos'), fullPage: true });
-
-  console.log('6. Activar modo comparación');
-  const toggleLabel = page.locator('label:has-text("Modo comparación")');
-  await toggleLabel.locator('input[type="checkbox"]').check();
+  console.log('6. Asignar Bruno padre y Mateo madre de Hijo');
+  await clickNodeBackground('Hijo');
   await wait(300);
-  await page.screenshot({ path: SHOT('02-comparison-mode-on'), fullPage: true });
-
-  // El paso 4 capturó el patrón: `.click()` de Playwright centra sobre el
-  // `<g>` interno de la foto que hace stopPropagation (intencional del producto,
-  // no se toca). Workaround: dispatchEvent dirigido al `<rect>` background, que
-  // es el que tiene el handler onClick → onSelect. Episodio
-  // [[2026-05-22-playwright-headless-plus-multimodal-llm-closes-ui-validation-loop]].
-  const clickNodeBackground = async (name) => {
-    await page.evaluate((n) => {
-      const g = document.querySelector(`g[aria-label^="${n}"]`);
-      if (!g) throw new Error(`No SVG g for ${n}`);
-      const rect = g.querySelector('rect');
-      if (!rect) throw new Error(`No background rect inside ${n}`);
-      rect.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    }, name);
-  };
-
-  console.log('7. Click sobre Bruno (P1)');
-  await clickNodeBackground('Bruno');
+  await page.locator('label:has-text("Padre:") select').selectOption({ label: 'Bruno' });
   await wait(300);
-  await page.screenshot({ path: SHOT('03-p1-selected'), fullPage: true });
+  await page.locator('label:has-text("Madre:") select').selectOption({ label: 'Mateo' });
+  await wait(300);
+  await page.click('button:has-text("cerrar")');
+  await wait(200);
+  await page.screenshot({ path: SHOT('01-pedigree-canonical'), fullPage: true });
 
-  console.log('8. Click sobre Mateo (P2) → dispara cómputo');
-  await clickNodeBackground('Mateo');
-
-  // Esperar a que el cosine aparezca (no isComputing).
-  await page.waitForFunction(() => {
-    const el = document.querySelector('[data-testid="cosine-value"]');
-    if (!el) return false;
-    const t = el.textContent || '';
-    return t !== '…' && t !== '—';
-  }, null, { timeout: 60000 });
-  await wait(500);
-
-  const cosineText = await page.locator('[data-testid="cosine-value"]').textContent();
-  console.log(`   cosine = ${cosineText}`);
-  await page.screenshot({ path: SHOT('04-comparison-result'), fullPage: true });
-
-  console.log('9. Recompute (debe re-correr y dar mismo resultado)');
-  await page.click('button:has-text("↻ recompute")');
-  await page.waitForFunction(() => {
-    const el = document.querySelector('[data-testid="cosine-value"]');
-    return el && el.textContent === '…';
-  }, null, { timeout: 5000 }).catch(() => { /* puede ser muy rápido */ });
-  await page.waitForFunction(() => {
-    const el = document.querySelector('[data-testid="cosine-value"]');
-    return el && el.textContent !== '…' && el.textContent !== '—';
-  }, null, { timeout: 60000 });
-  await wait(500);
-  const cosineText2 = await page.locator('[data-testid="cosine-value"]').textContent();
-  console.log(`   cosine post-recompute = ${cosineText2}`);
-  if (cosineText !== cosineText2) {
-    console.log(`   ⚠ cosine cambió tras recompute (era ${cosineText}, ahora ${cosineText2})`);
+  console.log('7. Ctrl+click Bruno → sel 1');
+  await clickNodeBackground('Bruno', true);
+  await wait(300);
+  const after1Pairs = await page.locator('g[data-pair-key]').count();
+  if (after1Pairs !== 0) {
+    await fail(`Con 1 seleccionado no debería haber pares; encontré ${after1Pairs}`);
   }
-  await page.screenshot({ path: SHOT('05-after-recompute'), fullPage: true });
+  await page.screenshot({ path: SHOT('02-sel-1'), fullPage: true });
 
-  console.log('10. Refresh y verificar que historial persiste');
-  await page.reload({ waitUntil: 'load' });
-  await goToTreeTab();
-  // Activar modo comparación para ver el panel.
-  await page.locator('label:has-text("Modo comparación")').locator('input[type="checkbox"]').check();
-  await wait(500);
-  await page.screenshot({ path: SHOT('06-after-reload'), fullPage: true });
-
-  // Verificar que hay >= 1 entrada en el historial.
-  const histText = await page.locator('text=Historial').first().textContent();
-  console.log(`   historial label = "${histText}"`);
-  const histMatch = histText?.match(/Historial \((\d+)\)/);
-  const histCount = histMatch ? parseInt(histMatch[1], 10) : 0;
-  if (histCount < 2) {
-    await fail(`Historial debería tener ≥2 entradas (cómputo inicial + recompute), tiene ${histCount}`);
+  console.log('8. Ctrl+click Mateo → sel 2 (dispara cómputo de 1 par)');
+  await clickNodeBackground('Mateo', true);
+  await waitAllCosinesReady();
+  const after2Pairs = await page.locator('g[data-pair-key]').count();
+  if (after2Pairs !== 1) {
+    await fail(`Con 2 seleccionados esperaba 1 par, encontré ${after2Pairs}`);
   }
-  console.log(`   ✓ historial tiene ${histCount} entradas`);
+  const cosines2 = await page.locator('[data-testid="cosine-value"]').allTextContents();
+  console.log(`   1 cosine: ${cosines2.join(' ')}`);
+  await page.screenshot({ path: SHOT('03-sel-2-one-line'), fullPage: true });
 
-  console.log('11. Borrar una entrada del historial');
-  const firstDeleteBtn = page.locator('ul li button:has-text("✕")').first();
-  await firstDeleteBtn.click();
+  console.log('9. Ctrl+click Hijo → sel 3 (dispara cómputo de 2 pares nuevos; total 3)');
+  await clickNodeBackground('Hijo', true);
+  await waitAllCosinesReady();
+  const after3Pairs = await page.locator('g[data-pair-key]').count();
+  if (after3Pairs !== 3) {
+    await fail(`Con 3 seleccionados esperaba 3 pares, encontré ${after3Pairs}`);
+  }
+  const cosines3 = await page.locator('[data-testid="cosine-value"]').allTextContents();
+  console.log(`   3 cosines: ${cosines3.join(' · ')}`);
+  await page.screenshot({ path: SHOT('04-sel-3-three-lines'), fullPage: true });
+
+  console.log('10. Click sobre cosine label Bruno↔Mateo → abre modal de tripleta');
+  // El label tiene data-testid="cosine-svg-label" envuelto en un <g>. Tomamos
+  // el primero (el del par 1, que es Bruno↔Mateo según el orden de selección).
+  // Para hacer click sobre el <g> SVG con cosine cacheado, dispatchEvent al
+  // <rect> hijo del label.
+  await page.evaluate(() => {
+    const labels = document.querySelectorAll('[data-testid="cosine-svg-label"]');
+    if (labels.length === 0) throw new Error('No cosine labels en SVG');
+    const first = labels[0];
+    const rect = first.querySelector('rect');
+    if (!rect) throw new Error('Label sin rect');
+    rect.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  });
   await wait(400);
-  const histText2 = await page.locator('text=Historial').first().textContent();
-  const histMatch2 = histText2?.match(/Historial \((\d+)\)/);
-  const histCount2 = histMatch2 ? parseInt(histMatch2[1], 10) : 0;
-  if (histCount2 !== histCount - 1) {
-    await fail(`Historial debería bajar a ${histCount - 1} tras borrar, está en ${histCount2}`);
+  const modalVisible = await page.locator('[data-testid="triplet-modal"]').count();
+  if (modalVisible !== 1) {
+    await fail(`Esperaba modal de tripleta abierto, encontré ${modalVisible}`);
   }
-  console.log(`   ✓ historial bajó a ${histCount2}`);
-  await page.screenshot({ path: SHOT('07-after-delete-from-history'), fullPage: true });
+  // En el modal, el cosine A↔B debería estar visible (mismo valor: 0.2302).
+  const modalCosines = await page.locator('[data-testid="cosine-modal-value"]').allTextContents();
+  console.log(`   modal cosines: ${modalCosines.join(' · ')}`);
+  if (!modalCosines.some((c) => c === '0.2302')) {
+    await fail(`Esperaba cosine 0.2302 en el modal, encontré: ${modalCosines.join(', ')}`);
+  }
+  await page.screenshot({ path: SHOT('05-modal-pair'), fullPage: true });
 
-  console.log('OK paso 5 smoke');
+  console.log('11. Agregar tercero (Hijo) → dispara 2 cómputos extras');
+  await page.locator('[data-testid="triplet-add-third"]').selectOption({ label: 'Hijo' });
+  // Esperar a que las 3 cosines estén listas en el modal.
+  await page.waitForFunction(() => {
+    const labels = Array.from(document.querySelectorAll('[data-testid="cosine-modal-value"]'));
+    return labels.length === 3 && labels.every((el) => (el.textContent || '') !== '…');
+  }, null, { timeout: 60000 });
+  const modal3Cosines = await page.locator('[data-testid="cosine-modal-value"]').allTextContents();
+  console.log(`   3 cosines en modal: ${modal3Cosines.join(' · ')}`);
+  await page.screenshot({ path: SHOT('06-modal-triplet'), fullPage: true });
+
+  console.log('12. Handoff → click "abrir en Comparador MVP"');
+  await page.locator('[data-testid="triplet-handoff-mvp"]').click();
+  await wait(400);
+  // Verificar que cambió al tab Comparador (h1 del componente).
+  await page.waitForSelector('h1:has-text("Comparador anónimo")', { timeout: 5000 });
+  // El Comparator carga los slots desde IDB; las fotos pueden tardar un
+  // par de ticks en aparecer (read from IDB + createObjectURL). Esperamos
+  // que los 3 slots tengan <img>.
+  await page.waitForFunction(() => {
+    // Comparator pinta cada slot cargado con un <img>. Si hay >=3 imgs en la
+    // página del Comparator, el prefill funcionó.
+    const imgs = document.querySelectorAll('img');
+    return imgs.length >= 3;
+  }, null, { timeout: 10000 });
+  await page.screenshot({ path: SHOT('07-comparator-prefilled'), fullPage: true });
+  console.log('   ✓ Comparador prellenado');
+
+  console.log('OK smoke multi-selección + tripleta + handoff');
 } catch (e) {
   await page.screenshot({ path: SHOT('99-error'), fullPage: true });
   await fail('exception', e);

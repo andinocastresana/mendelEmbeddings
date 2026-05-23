@@ -1,7 +1,16 @@
 // =========================================
 // ID: PHYLOFACE_COMPARATOR
-// VERSION: v2.2
+// VERSION: v2.3
 // =========================================
+// Cambio v2.2 → v2.3 (Tarea #26 iter tripleta — handoff desde árbol):
+// - Al montar, el comparador inspecciona `localStorage["phyloface-comparator-prefill"]`.
+//   Si existe y es válido (versión 1, age < 60s, esquema correcto), lee los
+//   blobs apuntados por sha256 desde el store de árbol (`treeStore.getPhoto`)
+//   y los carga como `File` en los slots correspondientes. Roles laterales
+//   también se restauran si vienen en el payload. La key se borra al consumirse.
+// - El prefill viene del `TripletModal` del árbol cuando el usuario clickea
+//   "→ abrir en Comparador MVP". No hay otro emisor.
+//
 // Cambio v2.1 → v2.2 (Tarea #27, bugfix calentamiento sostenido):
 // - Cleanup explícito de los recursos GPU/WASM al desmontar el componente.
 //   `FaceLandmarker.close()` y `InferenceSession.release()` se invocan en el
@@ -61,6 +70,39 @@ import {
   loadImage,
   type PipelineOutput,
 } from './lib/pipeline';
+import { getPhoto } from './lib/treeStore';
+
+// Clave de localStorage para handoff desde el árbol (ver cabecera v2.3).
+const PREFILL_KEY = 'phyloface-comparator-prefill';
+const PREFILL_MAX_AGE_MS = 60_000;
+
+interface PrefillSlot {
+  slot: 'left' | 'child' | 'right';
+  sha256: string;
+  role?: string;  // sólo aplica a left/right
+}
+
+interface PrefillPayload {
+  v: 1;
+  ts: number;
+  slots: PrefillSlot[];
+}
+
+function readAndConsumePrefill(): PrefillPayload | null {
+  const raw = localStorage.getItem(PREFILL_KEY);
+  if (!raw) return null;
+  localStorage.removeItem(PREFILL_KEY);
+  try {
+    const parsed = JSON.parse(raw) as PrefillPayload;
+    if (parsed.v !== 1) return null;
+    if (typeof parsed.ts !== 'number') return null;
+    if (Date.now() - parsed.ts > PREFILL_MAX_AGE_MS) return null;
+    if (!Array.isArray(parsed.slots)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 // -----------------------------------------
 // Slots y roles
@@ -233,6 +275,61 @@ function Comparator() {
       sessionRef.current = null;
       if (sess) void sess.release().catch((e) => console.warn('[Comparator] session.release falló:', e));
     };
+  }, []);
+
+  // ---------------------------------------
+  // Prefill desde handoff del árbol (cabecera v2.3). Sólo al montar; la key
+  // se consume y se borra. Si el blob de alguno de los slots no existe en
+  // IDB (poco probable porque el modal acababa de leerlo) se saltea ese slot.
+  // ---------------------------------------
+  useEffect(() => {
+    const prefill = readAndConsumePrefill();
+    if (!prefill) return;
+    void (async () => {
+      const nextSlots: Partial<Record<SlotKey, SlotState>> = {};
+      let newLeftRole: Role | null = null;
+      let newRightRole: Role | null = null;
+      for (const s of prefill.slots) {
+        if (s.slot !== 'left' && s.slot !== 'child' && s.slot !== 'right') continue;
+        try {
+          const rec = await getPhoto(s.sha256);
+          if (!rec) {
+            console.warn(`[Comparator] prefill: photo ${s.sha256.slice(0, 8)}… no está en IDB`);
+            continue;
+          }
+          const file = new File(
+            [rec.blob],
+            `prefill-${s.sha256.slice(0, 8)}.jpg`,
+            { type: rec.blob.type || 'image/jpeg' },
+          );
+          nextSlots[s.slot] = {
+            file,
+            previewUrl: URL.createObjectURL(file),
+            result: null,
+            error: null,
+            isDraggingOver: false,
+          };
+          if (s.slot !== 'child' && s.role) {
+            const r = s.role as Role;
+            if ((ROLE_OPTIONS as readonly string[]).includes(r)) {
+              if (s.slot === 'left') newLeftRole = r;
+              if (s.slot === 'right') newRightRole = r;
+            }
+          }
+        } catch (e) {
+          console.warn(`[Comparator] prefill failed for slot ${s.slot}:`, e);
+        }
+      }
+      setSlots((prev) => ({
+        left: nextSlots.left ?? prev.left,
+        child: nextSlots.child ?? prev.child,
+        right: nextSlots.right ?? prev.right,
+      }));
+      if (newLeftRole) setLeftRole(newLeftRole);
+      if (newRightRole) setRightRole(newRightRole);
+      setCosines([]);
+      setGlobalError(null);
+    })();
   }, []);
 
   // ---------------------------------------

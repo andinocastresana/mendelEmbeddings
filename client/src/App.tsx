@@ -1,6 +1,6 @@
 // =========================================
 // ID: PHYLOFACE_CLIENT_001
-// VERSION: v1.2
+// VERSION: v1.3
 // =========================================
 // App principal del cliente. Router simple entre:
 //   - Comparator        (PHYLOFACE_COMPARATOR): MVP Track 2a — 3 slots (P1 · Hijo · P2)
@@ -10,6 +10,13 @@
 //   - Spike Alignment   (PHYLOFACE_SPIKE_003): paridad alineación canónica JS vs Python
 //   - Spike Detection   (PHYLOFACE_SPIKE_004): pipeline e2e (detect → align → embed) JS vs Python
 //
+// Cambio v1.2 → v1.3 (Tarea #26 iter tripleta): App escucha
+// CustomEvent("phyloface-go-to-tab", { detail: Tab }) en window. Lo usa
+// `GenealogyTree.tsx` cuando el usuario pide "→ abrir en Comparador MVP"
+// desde el modal de tripleta. El handoff es asincrónico (el modal escribe
+// `localStorage["phyloface-comparator-prefill"]` y dispara el event; el
+// Comparator lee el prefill al montar).
+//
 // Cambio v1.1 → v1.2 (Tarea #26 paso 2): sumar tab "Árbol genealógico" que
 // monta el MVP paso 2 (lista plana de personas + persistencia IDB). El SVG
 // del pedigree y la comparación on-demand llegan en pasos 4-5.
@@ -18,7 +25,7 @@
 // Los spikes quedan accesibles para reproducir las métricas de paridad y
 // debug rápido del pipeline contra fixtures Python.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Comparator from './Comparator';
 import GenealogyTree from './GenealogyTree';
 import SpikeOnnx from './SpikeOnnx';
@@ -28,8 +35,26 @@ import SpikeDetection from './SpikeDetection';
 
 type Tab = 'comparator' | 'genealogy' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
 
+const VALID_TABS: Tab[] = ['comparator', 'genealogy', 'onnx', 'mediapipe', 'alignment', 'detection'];
+
 function App() {
   const [tab, setTab] = useState<Tab>('comparator');
+
+  // Listener global para cambio de tab vía CustomEvent. Permite que componentes
+  // hijos (TripletModal en GenealogyTree) salten al Comparador MVP sin tener
+  // que pasar setTab por prop drilling. El handoff completo además escribe
+  // `localStorage["phyloface-comparator-prefill"]`; Comparator lo lee al
+  // montar.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'string' && (VALID_TABS as string[]).includes(detail)) {
+        setTab(detail as Tab);
+      }
+    };
+    window.addEventListener('phyloface-go-to-tab', handler);
+    return () => window.removeEventListener('phyloface-go-to-tab', handler);
+  }, []);
 
   const tabStyle = (active: boolean) => ({
     padding: '10px 20px',

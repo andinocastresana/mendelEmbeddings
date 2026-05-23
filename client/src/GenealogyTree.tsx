@@ -74,18 +74,15 @@ import {
   newPerson,
   newTree,
   wouldCreateCycle,
-  type Comparison,
   type Person,
   type PersonId,
   type Sha256Hex,
   type Tree,
 } from './lib/genealogy';
 import {
-  deleteComparison,
   deletePerson,
   deleteTree,
   getPhoto,
-  listComparisons,
   listPersons,
   listTrees,
   putPerson,
@@ -102,6 +99,7 @@ import {
   initOnnxSession,
   loadImage,
 } from './lib/pipeline';
+import TripletModal from './TripletModal';
 
 const LAST_TREE_KEY = 'phyloface-genealogy-last-tree';
 
@@ -127,16 +125,25 @@ export default function GenealogyTree() {
   // Persona-target del drag-over actual (para highlight visual).
   const [dragOverPersonId, setDragOverPersonId] = useState<PersonId | null>(null);
 
-  // ----- Modo comparación (paso 5) -----
-  const [comparisonMode, setComparisonMode] = useState(false);
-  const [p1Id, setP1Id] = useState<PersonId | null>(null);
-  const [p2Id, setP2Id] = useState<PersonId | null>(null);
-  // Resultado del cómputo actual. Null si todavía no se computó (P2 sin elegir
-  // o cómputo en curso). Distinto de la lista persistida `comparisons`.
-  const [currentCosine, setCurrentCosine] = useState<number | null>(null);
+  // ----- Selección múltiple para comparar (paso 5, iter multi-select) -----
+  // Lista ordenada de PersonIds seleccionados via ctrl/cmd+click. El orden
+  // refleja el orden de selección y se usa para numerar los badges (1, 2, …).
+  // Toggle por click: si el id ya está en la lista, se saca (y todas las
+  // comparaciones que lo involucran); si no, se agrega y se disparan los
+  // cómputos de los pares nuevos. Para N seleccionados hay N*(N-1)/2 pares.
+  // Click sin modifier sigue abriendo el panel detalle.
+  const [selectedForCompare, setSelectedForCompare] = useState<PersonId[]>([]);
+  // Cosine por par (key canónica `pairKey(a, b)`). Sólo entries para pares
+  // *activos* (ambos extremos están en selectedForCompare); al deseleccionar
+  // un nodo, sus entries se podan. Si se vuelve a seleccionar, se recomputa
+  // (rápido si los embeddings ya están cacheados en PhotoRecord).
+  const [cosineByPair, setCosineByPair] = useState<Map<string, number>>(() => new Map());
   const [isComputing, setIsComputing] = useState(false);
-  // Historial persistido (filtrado por treeId activo).
-  const [comparisons, setComparisons] = useState<Comparison[]>([]);
+  // Modal de tripleta abierto. Contiene los ids del par origen + el cosine
+  // cacheado del par (que ya conocemos al click). null = cerrado.
+  const [tripletModalState, setTripletModalState] = useState<{
+    aId: PersonId; bId: PersonId; cosine: number;
+  } | null>(null);
 
   // Recursos pesados (GPU/WASM) compartidos entre todas las comparaciones del
   // mismo mount. Init lazy en `ensureEmbedding`. Cleanup obligatorio al
@@ -238,42 +245,19 @@ export default function GenealogyTree() {
     };
   }, []);
 
-  // -------------------------------------
-  // Cargar historial de comparaciones cuando cambia el árbol activo.
-  // No filtramos por personas borradas: el historial es valioso aún si una
-  // de las personas referenciadas dejó de existir (la UI lo refleja).
-  // -------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (!selectedTreeId) {
-        setComparisons([]);
-        return;
-      }
-      try {
-        const list = await listComparisons(selectedTreeId);
-        if (!cancelled) {
-          // Ordenadas más reciente primero — UX habitual de historial.
-          list.sort((a, b) => b.computedAt - a.computedAt);
-          setComparisons(list);
-        }
-      } catch (e) {
-        if (!cancelled) setError(`Cargando historial de comparaciones: ${(e as Error).message}`);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTreeId]);
-
-  // Helper para resetear la selección viva sin tocar el historial persistido.
-  // Lo invocan: toggle off, cambio de árbol, "comparar de nuevo" tras un
-  // resultado, y errores fatales de cómputo.
+  // Helper para resetear la selección viva sin tocar el historial persistido
+  // en IDB. Lo invocan: cambio de árbol, botón "↺ limpiar selección" del
+  // hint bar, errores fatales de cómputo.
   const resetComparisonSelection = useCallback(() => {
-    setP1Id(null);
-    setP2Id(null);
-    setCurrentCosine(null);
+    setSelectedForCompare([]);
+    setCosineByPair(new Map());
   }, []);
+
+  // Key canónica para un par (independiente del orden). Usamos lexicográfico
+  // sobre los UUIDs porque comparar strings es barato y `selectedForCompare`
+  // siempre tiene ≤ pocas decenas de entradas.
+  const pairKey = (a: PersonId, b: PersonId): string =>
+    a < b ? `${a}|${b}` : `${b}|${a}`;
 
   // -------------------------------------
   // ensureEmbedding(sha256): devuelve el embedding ArcFace 512-d para una
@@ -314,107 +298,94 @@ export default function GenealogyTree() {
   }, []);
 
   // -------------------------------------
-  // runComparison(p1, p2, opts): computa cosine + persiste como Comparison.
-  // Si `forceRecompute=true`, invalida el cache de embedding de ambas fotos
-  // (borra y vuelve a calcular). Sino, usa lo que haya cacheado.
+  // computeMissingPairsFor(sel): para una selección actual `sel`, computa
+  // todos los pares cuya cosine aún no está en `cosineByPair` y los agrega.
+  // Persistente: cada cómputo guarda una `Comparison` en IDB (silencioso —
+  // no hay UI de historial todavía pero la data queda).
+  //
+  // Si falta foto en cualquier nodo del par, ese par se saltea con un setError
+  // amistoso (el resto sí se computa).
   // -------------------------------------
-  const runComparison = useCallback(async (
-    person1: Person,
-    person2: Person,
-    opts: { forceRecompute?: boolean } = {},
-  ): Promise<void> => {
-    if (!selectedTreeId) return;
-    if (!person1.photoSha256) {
-      setError(`"${person1.name}" no tiene foto cargada. Arrastrá una sobre el nodo primero.`);
-      return;
+  const computeMissingPairsFor = useCallback(async (sel: PersonId[]): Promise<void> => {
+    if (!selectedTreeId || sel.length < 2) return;
+    // Pares ordenados (i<j en sel) sin entry en cosineByPair.
+    const pending: Array<[Person, Person]> = [];
+    for (let i = 0; i < sel.length; i++) {
+      for (let j = i + 1; j < sel.length; j++) {
+        const key = pairKey(sel[i], sel[j]);
+        if (cosineByPair.has(key)) continue;
+        const a = persons.find((p) => p.id === sel[i]);
+        const b = persons.find((p) => p.id === sel[j]);
+        if (a && b) pending.push([a, b]);
+      }
     }
-    if (!person2.photoSha256) {
-      setError(`"${person2.name}" no tiene foto cargada. Arrastrá una sobre el nodo primero.`);
-      return;
-    }
+    if (pending.length === 0) return;
     setIsComputing(true);
     setError(null);
     try {
-      const emb1 = await ensureEmbedding(person1.photoSha256, opts.forceRecompute);
-      const emb2 = await ensureEmbedding(person2.photoSha256, opts.forceRecompute);
-      const cos = cosineSimilarity(emb1, emb2);
-      setCurrentCosine(cos);
-      const comp = newComparison(
-        selectedTreeId,
-        person1.id,
-        person2.id,
-        person1.photoSha256,
-        person2.photoSha256,
-        cos,
-      );
-      await saveComparison(comp);
-      setComparisons((prev) => [comp, ...prev]);
-    } catch (e) {
-      setError(`Comparando: ${(e as Error).message}`);
-      setCurrentCosine(null);
+      for (const [a, b] of pending) {
+        if (!a.photoSha256 || !b.photoSha256) {
+          const missing = !a.photoSha256 ? a.name : b.name;
+          setError(`"${missing}" no tiene foto cargada — par salteado.`);
+          continue;
+        }
+        try {
+          const eA = await ensureEmbedding(a.photoSha256);
+          const eB = await ensureEmbedding(b.photoSha256);
+          const cos = cosineSimilarity(eA, eB);
+          const key = pairKey(a.id, b.id);
+          // Usar updater funcional: durante un loop largo cosineByPair
+          // capturada por closure queda desactualizada.
+          setCosineByPair((prev) => {
+            const next = new Map(prev);
+            next.set(key, cos);
+            return next;
+          });
+          await saveComparison(newComparison(
+            selectedTreeId, a.id, b.id, a.photoSha256, b.photoSha256, cos,
+          ));
+        } catch (e) {
+          setError(`Error comparando "${a.name}" ↔ "${b.name}": ${(e as Error).message}`);
+        }
+      }
     } finally {
       setIsComputing(false);
     }
-  }, [selectedTreeId, ensureEmbedding]);
+  }, [selectedTreeId, persons, cosineByPair, ensureEmbedding]);
 
-  // Click sobre nodo. En modo comparación off → selecciona para detalle.
-  // En modo on:
-  //   - sin P1 → setea P1
-  //   - con P1 sin P2, click sobre otro → setea P2 y dispara cómputo
-  //   - con P1 y P2 ya elegidos → trata el click como "P1 nuevo, reset"
-  //   - click sobre P1 mientras es P1 → no-op (evita disparar comparación
-  //     consigo misma).
-  const handleNodeClick = useCallback((id: PersonId) => {
-    if (!comparisonMode) {
+  // Click sobre nodo. `withModifier=true` (ctrl/cmd+click) → toggle en
+  // `selectedForCompare`. `withModifier=false` (click normal) → abre/cambia
+  // panel detalle, sin afectar la selección activa.
+  //
+  // Toggle:
+  //   - si el id ya está → quitarlo + podar entries de cosineByPair que lo
+  //     involucran.
+  //   - si no → agregarlo al final + disparar `computeMissingPairsFor` para
+  //     calcular las cosines de los nuevos pares con los previamente
+  //     seleccionados.
+  const handleNodeClick = useCallback((id: PersonId, withModifier: boolean) => {
+    if (!withModifier) {
       setSelectedPersonId(id);
       return;
     }
-    if (p1Id === null) {
-      setP1Id(id);
+    if (selectedForCompare.includes(id)) {
+      const next = selectedForCompare.filter((x) => x !== id);
+      setSelectedForCompare(next);
+      // Podar cosines de pares que involucran al id removido.
+      setCosineByPair((prev) => {
+        const updated = new Map<string, number>();
+        for (const [k, v] of prev) {
+          const [a, b] = k.split('|');
+          if (a !== id && b !== id) updated.set(k, v);
+        }
+        return updated;
+      });
       return;
     }
-    if (p2Id !== null) {
-      setP1Id(id);
-      setP2Id(null);
-      setCurrentCosine(null);
-      return;
-    }
-    if (id === p1Id) return;
-    const person1 = persons.find((p) => p.id === p1Id);
-    const person2 = persons.find((p) => p.id === id);
-    if (!person1 || !person2) return;
-    setP2Id(id);
-    void runComparison(person1, person2);
-  }, [comparisonMode, p1Id, p2Id, persons, runComparison]);
-
-  const handleToggleComparisonMode = useCallback(() => {
-    setComparisonMode((prev) => {
-      if (prev) {
-        // Al apagar el modo, resetear la selección viva.
-        setP1Id(null);
-        setP2Id(null);
-        setCurrentCosine(null);
-      }
-      return !prev;
-    });
-  }, []);
-
-  const handleRecompute = useCallback(() => {
-    if (!p1Id || !p2Id) return;
-    const person1 = persons.find((p) => p.id === p1Id);
-    const person2 = persons.find((p) => p.id === p2Id);
-    if (!person1 || !person2) return;
-    void runComparison(person1, person2, { forceRecompute: true });
-  }, [p1Id, p2Id, persons, runComparison]);
-
-  const handleDeleteComparison = useCallback(async (id: string) => {
-    try {
-      await deleteComparison(id);
-      setComparisons((prev) => prev.filter((c) => c.id !== id));
-    } catch (e) {
-      setError(`Borrando comparación: ${(e as Error).message}`);
-    }
-  }, []);
+    const next = [...selectedForCompare, id];
+    setSelectedForCompare(next);
+    void computeMissingPairsFor(next);
+  }, [selectedForCompare, computeMissingPairsFor]);
 
   const handleSelectTree = useCallback((id: string | null) => {
     setSelectedTreeId(id);
@@ -648,29 +619,27 @@ export default function GenealogyTree() {
         </button>
       </div>
 
-      {/* Toolbar de modo comparación */}
-      <div style={{ ...toolbarStyle, background: comparisonMode ? '#fff7e0' : '#f4f4f4' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={comparisonMode}
-            onChange={handleToggleComparisonMode}
-            disabled={!selectedTreeId || persons.length < 2}
-          />
-          <strong>Modo comparación</strong>
-        </label>
-        <span style={{ color: '#666', fontSize: 12 }}>
-          {!comparisonMode && 'click sobre un nodo abre detalle'}
-          {comparisonMode && p1Id === null && '→ click sobre un nodo para elegir P1'}
-          {comparisonMode && p1Id !== null && p2Id === null && '→ click sobre otro nodo para elegir P2 y comparar'}
-          {comparisonMode && p1Id !== null && p2Id !== null && !isComputing && '✓ comparación lista. Click sobre otro nodo para reiniciar.'}
-          {comparisonMode && isComputing && '⏳ computando embeddings…'}
+      {/* Hint de UX: ctrl/cmd+click selecciona/deselecciona nodos para
+          comparación múltiple. Cuando hay ≥1 seleccionado muestro estado +
+          botón para limpiar. */}
+      <div style={{ ...toolbarStyle, background: selectedForCompare.length > 0 ? '#fff7e0' : '#f4f4f4', fontSize: 12 }}>
+        <span style={{ color: '#555' }}>
+          <strong>Click</strong> sobre un nodo abre el panel de detalle ·{' '}
+          <strong>Ctrl/Cmd+click</strong> selecciona (o deselecciona) un nodo
+          para comparar. Se calculan todas las cosines par a par.
         </span>
         <span style={{ flex: 1 }} />
-        {comparisonMode && (p1Id !== null || p2Id !== null) && (
-          <button onClick={resetComparisonSelection} disabled={isComputing} style={{ fontSize: 12 }}>
-            ↺ reiniciar selección
-          </button>
+        {selectedForCompare.length > 0 && (
+          <>
+            <span style={{ color: '#666' }}>
+              {isComputing && '⏳ computando…'}
+              {!isComputing && selectedForCompare.length === 1 && '→ 1 seleccionado. Ctrl+click sobre otro para empezar a comparar.'}
+              {!isComputing && selectedForCompare.length >= 2 && `✓ ${selectedForCompare.length} seleccionados · ${cosineByPair.size} comparación${cosineByPair.size === 1 ? '' : 'es'}`}
+            </span>
+            <button onClick={resetComparisonSelection} disabled={isComputing}>
+              ↺ limpiar selección
+            </button>
+          </>
         )}
       </div>
 
@@ -689,54 +658,59 @@ export default function GenealogyTree() {
           photoUrls={photoUrls}
           selectedPersonId={selectedPersonId}
           dragOverPersonId={dragOverPersonId}
-          p1Id={comparisonMode ? p1Id : null}
-          p2Id={comparisonMode ? p2Id : null}
+          selectedForCompare={selectedForCompare}
+          cosineByPair={cosineByPair}
+          isComputing={isComputing}
           onSelect={handleNodeClick}
           onUploadPhoto={handleUploadPhoto}
           onDragOverPerson={setDragOverPersonId}
+          onCosineClick={(aId, bId, cos) => setTripletModalState({ aId, bId, cosine: cos })}
         />
       )}
 
-      {/* Paneles inferiores: detalle y/o comparación, lado a lado cuando
-          ambos están activos. Cada uno se renderea si tiene contenido. */}
-      {(selectedPerson || comparisonMode) && (
-        <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
-          {selectedPerson && (
-            <div style={{ flex: '1 1 360px', minWidth: 320 }}>
-              <PersonDetailPanel
-                person={selectedPerson}
-                persons={persons}
-                personsById={personsById}
-                photoUrl={selectedPerson.photoSha256 ? photoUrls.get(selectedPerson.photoSha256) ?? null : null}
-                onSetParent={handleSetParent}
-                onUploadPhoto={handleUploadPhoto}
-                onDelete={handleDeletePerson}
-                onClose={() => setSelectedPersonId(null)}
-              />
-            </div>
-          )}
-          {comparisonMode && (
-            <div style={{ flex: '1 1 360px', minWidth: 320 }}>
-              <ComparisonPanel
-                p1={p1Id ? persons.find((p) => p.id === p1Id) ?? null : null}
-                p2={p2Id ? persons.find((p) => p.id === p2Id) ?? null : null}
-                photoUrls={photoUrls}
-                currentCosine={currentCosine}
-                isComputing={isComputing}
-                comparisons={comparisons}
-                personsById={personsById}
-                onRecompute={handleRecompute}
-                onDeleteComparison={handleDeleteComparison}
-              />
-            </div>
-          )}
-        </div>
+      {/* Modal de tripleta: detalle del par seleccionado + agregar tercero +
+          handoff al Comparador MVP. Sólo visible si hay un par con cosine
+          computado. */}
+      {tripletModalState && (() => {
+        const aPerson = persons.find((p) => p.id === tripletModalState.aId);
+        const bPerson = persons.find((p) => p.id === tripletModalState.bId);
+        if (!aPerson || !bPerson) return null;
+        const candidates = persons.filter(
+          (p) => p.id !== aPerson.id && p.id !== bPerson.id && p.photoSha256 !== null,
+        );
+        return (
+          <TripletModal
+            a={aPerson}
+            b={bPerson}
+            initialCosine={tripletModalState.cosine}
+            candidates={candidates}
+            photoUrls={photoUrls}
+            personsById={personsById}
+            ensureEmbedding={ensureEmbedding}
+            onClose={() => setTripletModalState(null)}
+          />
+        );
+      })()}
+
+      {/* Panel detalle de la persona seleccionada (click normal). */}
+      {selectedPerson && (
+        <PersonDetailPanel
+          person={selectedPerson}
+          persons={persons}
+          personsById={personsById}
+          photoUrl={selectedPerson.photoSha256 ? photoUrls.get(selectedPerson.photoSha256) ?? null : null}
+          onSetParent={handleSetParent}
+          onUploadPhoto={handleUploadPhoto}
+          onDelete={handleDeletePerson}
+          onClose={() => setSelectedPersonId(null)}
+        />
       )}
 
       <p style={{ color: '#888', marginTop: 24, fontSize: 12 }}>
-        Paso 5 listo: modo comparación on-demand entre dos personas con foto,
-        embedding cacheado por SHA-256 en IndexedDB, historial persistido por
-        árbol.
+        Pedigree canónico (línea de unión padres → bus de hermanos) +
+        comparación multi-selección con <code>Ctrl/Cmd+click</code>. Se
+        computa el cosine entre cada par de nodos seleccionados y aparece
+        sobre la línea que los conecta.
       </p>
     </div>
   );
@@ -753,13 +727,26 @@ interface PedigreeSvgProps {
   photoUrls: Map<string, string>;
   selectedPersonId: PersonId | null;
   dragOverPersonId: PersonId | null;
-  /** Si != null, el nodo correspondiente se resalta como P1 (modo comparación). */
-  p1Id: PersonId | null;
-  /** Si != null, el nodo correspondiente se resalta como P2 (modo comparación). */
-  p2Id: PersonId | null;
-  onSelect: (id: PersonId) => void;
+  /** Lista ordenada de PersonIds seleccionados para comparar (ctrl+click). */
+  selectedForCompare: PersonId[];
+  /** Cosines de los pares activos (key canónica `min(a,b)|max(a,b)`). */
+  cosineByPair: Map<string, number>;
+  /** True mientras se computan los cosines (labels pendientes muestran "…"). */
+  isComputing: boolean;
+  /**
+   * `withModifier` = true si el evento original tenía ctrlKey o metaKey, lo
+   * que dispara el toggle en `selectedForCompare`. Sin modifier abre el panel
+   * de detalle como siempre.
+   */
+  onSelect: (id: PersonId, withModifier: boolean) => void;
   onUploadPhoto: (id: PersonId, file: File) => void;
   onDragOverPerson: (id: PersonId | null) => void;
+  /**
+   * Click sobre el label del cosine de un par (rect blanco con borde naranja
+   * en el medio de la línea). Abre el modal de tripleta. Sólo dispara si el
+   * cosine ya está computado (clickear "…" no abre).
+   */
+  onCosineClick: (aId: PersonId, bId: PersonId, cosine: number) => void;
 }
 
 function PedigreeSvg({
@@ -769,36 +756,161 @@ function PedigreeSvg({
   photoUrls,
   selectedPersonId,
   dragOverPersonId,
-  p1Id,
-  p2Id,
+  selectedForCompare,
+  cosineByPair,
+  isComputing,
   onSelect,
   onUploadPhoto,
   onDragOverPerson,
+  onCosineClick,
 }: PedigreeSvgProps) {
   const { pos, viewW, viewH } = positions;
 
-  // Construir lista de líneas de parentesco (padre→hijo y madre→hijo). Solo
-  // dibuja la línea si el parent existe en el set (ignora refs colgadas).
-  const lines: { x1: number; y1: number; x2: number; y2: number; key: string }[] = [];
+  // -------------------------------------
+  // Líneas de parentesco — render canónico tipo pedigree clínico:
+  //   1) Línea horizontal de UNIÓN entre padre y madre (cuando ambos existen
+  //      en el set), trazada justo debajo de las cajas a la altura de su
+  //      bottom. Si los padres están en distintas generaciones, dibujamos
+  //      dos verticales para igualar altura antes de la línea horizontal.
+  //   2) Línea VERTICAL desde el centro de la unión (o desde el único padre)
+  //      bajando hasta el "sib-bus" (línea horizontal de hermanos a media
+  //      generación entre padres e hijos).
+  //   3) Línea horizontal del SIB-BUS desde min(child.cx) hasta max(child.cx)
+  //      (incluyendo el punto donde baja la vertical de los padres, así nunca
+  //      queda flotante el conector).
+  //   4) Línea VERTICAL desde el bus hasta el top de cada hijo.
+  // Agrupamos hijos por par (fatherId, motherId) — distintos pares producen
+  // buses separados (hermanos completos comparten bus, half-sibs no).
+  // Padres dangling (id que no está en `pos`) se ignoran sin romper el bus
+  // (el ⚠ del nodo ya marca el problema en el hijo).
+  // -------------------------------------
+
+  type Segment = { x1: number; y1: number; x2: number; y2: number; key: string };
+  const segments: Segment[] = [];
+
+  // Agrupar por par de padres efectivos (excluyendo danglings).
+  type ParentPairKey = string;
+  const groups = new Map<ParentPairKey, {
+    fatherId: PersonId | null;
+    motherId: PersonId | null;
+    children: Person[];
+  }>();
   for (const p of persons) {
-    const childPos = pos.get(p.id);
-    if (!childPos) continue;
-    for (const [role, parentId] of [
-      ['father', p.fatherId] as const,
-      ['mother', p.motherId] as const,
-    ]) {
-      if (parentId === null) continue;
-      const parentPos = pos.get(parentId);
-      if (!parentPos) continue; // dangling: parent borrado del set
-      // Línea del centro-bottom del padre/madre al centro-top del hijo. Las
-      // dos líneas (de father y de mother) terminan en el mismo punto del
-      // hijo; visualmente se confunden pero quedan claras al hover.
-      lines.push({
-        x1: parentPos.x + BOX_W / 2,
-        y1: parentPos.y + BOX_H,
-        x2: childPos.x + BOX_W / 2,
-        y2: childPos.y,
-        key: `${parentId}-${role}-${p.id}`,
+    const fid = p.fatherId !== null && pos.has(p.fatherId) ? p.fatherId : null;
+    const mid = p.motherId !== null && pos.has(p.motherId) ? p.motherId : null;
+    if (fid === null && mid === null) continue;
+    const key: ParentPairKey = `${fid ?? '_'}|${mid ?? '_'}`;
+    const existing = groups.get(key) ?? { fatherId: fid, motherId: mid, children: [] };
+    existing.children.push(p);
+    groups.set(key, existing);
+  }
+
+  for (const [key, g] of groups) {
+    // Coordenadas de los padres (centro-X y bottom-Y).
+    const fp = g.fatherId ? pos.get(g.fatherId) : null;
+    const mp = g.motherId ? pos.get(g.motherId) : null;
+    // child cxs ordenados.
+    const childPositions = g.children
+      .map((c) => pos.get(c.id))
+      .filter((pp): pp is { x: number; y: number } => pp != null);
+    if (childPositions.length === 0) continue;
+    const childCxs = childPositions.map((pp) => pp.x + BOX_W / 2);
+    const childTopY = childPositions[0].y; // todos los hijos del grupo en misma gen
+
+    // (1) Línea de unión entre padres + punto X desde el que baja la vertical.
+    let parentJoinX: number;
+    let parentJoinY: number;
+    if (fp && mp) {
+      const fcx = fp.x + BOX_W / 2;
+      const mcx = mp.x + BOX_W / 2;
+      // Si están en la misma gen, una sola horizontal. Sino, un par de L
+      // para igualar altura. Usamos `parentJoinY` = bottom del más bajo
+      // (mayor Y) — el conector se traza a esa altura.
+      const fb = fp.y + BOX_H;
+      const mb = mp.y + BOX_H;
+      parentJoinY = Math.max(fb, mb);
+      const leftCx = Math.min(fcx, mcx);
+      const rightCx = Math.max(fcx, mcx);
+      // Vertical "stub" de cada padre hacia parentJoinY (es 0 px si ya está ahí).
+      if (fb < parentJoinY) {
+        segments.push({ x1: fcx, y1: fb, x2: fcx, y2: parentJoinY, key: `${key}-fstub` });
+      }
+      if (mb < parentJoinY) {
+        segments.push({ x1: mcx, y1: mb, x2: mcx, y2: parentJoinY, key: `${key}-mstub` });
+      }
+      // Línea de unión horizontal entre padres.
+      segments.push({
+        x1: leftCx, y1: parentJoinY, x2: rightCx, y2: parentJoinY,
+        key: `${key}-union`,
+      });
+      parentJoinX = (fcx + mcx) / 2;
+    } else {
+      // Un solo padre conocido (el otro es null o dangling).
+      const only = fp ?? mp!;
+      parentJoinX = only.x + BOX_W / 2;
+      parentJoinY = only.y + BOX_H;
+    }
+
+    // (2) Vertical de los padres al sib-bus.
+    //     Sib-bus a mitad de camino vertical entre parentJoinY y childTopY.
+    const busY = (parentJoinY + childTopY) / 2;
+    segments.push({
+      x1: parentJoinX, y1: parentJoinY, x2: parentJoinX, y2: busY,
+      key: `${key}-drop`,
+    });
+
+    // (3) Horizontal del sib-bus. Incluye parentJoinX para que la "bajada" de
+    //     los padres se conecte siempre (caso límite: un único hijo no
+    //     alineado con parentJoinX).
+    const busAllXs = [parentJoinX, ...childCxs];
+    const busMinX = Math.min(...busAllXs);
+    const busMaxX = Math.max(...busAllXs);
+    if (busMinX < busMaxX) {
+      segments.push({
+        x1: busMinX, y1: busY, x2: busMaxX, y2: busY,
+        key: `${key}-bus`,
+      });
+    }
+
+    // (4) Vertical de cada hijo al bus.
+    for (let i = 0; i < g.children.length; i++) {
+      const child = g.children[i];
+      const cx = childCxs[i];
+      segments.push({
+        x1: cx, y1: busY, x2: cx, y2: childTopY,
+        key: `${key}-c${child.id}`,
+      });
+    }
+  }
+
+  // Líneas de comparación para cada par (i,j) con i<j en selectedForCompare.
+  // Cada segmento va de borde-a-borde (clip contra los rects de ambas cajas).
+  // El label sobre la línea muestra el cosine del par si ya está en
+  // cosineByPair, sino "…" mientras esté computing, sino "—".
+  type ComparisonRender = {
+    key: string;
+    line: LineSeg;
+    cosine: number | null;
+    aId: PersonId;
+    bId: PersonId;
+  };
+  const comparisonLines: ComparisonRender[] = [];
+  for (let i = 0; i < selectedForCompare.length; i++) {
+    for (let j = i + 1; j < selectedForCompare.length; j++) {
+      const aId = selectedForCompare[i];
+      const bId = selectedForCompare[j];
+      const aPos = pos.get(aId);
+      const bPos = pos.get(bId);
+      if (!aPos || !bPos) continue;
+      const line = clipLineBetweenBoxes(aPos, bPos, BOX_W, BOX_H);
+      if (!line) continue;
+      const k = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+      comparisonLines.push({
+        key: k,
+        line,
+        cosine: cosineByPair.get(k) ?? null,
+        aId,
+        bId,
       });
     }
   }
@@ -818,22 +930,54 @@ function PedigreeSvg({
         viewBox={`0 0 ${viewW} ${viewH}`}
         style={{ display: 'block' }}
       >
-        {/* Líneas primero, así quedan abajo de las cajas. */}
-        {lines.map((l) => (
+        {/* Segmentos de pedigree primero, así quedan debajo de las cajas. */}
+        {segments.map((s) => (
           <line
-            key={l.key}
-            x1={l.x1}
-            y1={l.y1}
-            x2={l.x2}
-            y2={l.y2}
+            key={s.key}
+            x1={s.x1}
+            y1={s.y1}
+            x2={s.x2}
+            y2={s.y2}
             stroke="#888"
             strokeWidth={1.5}
+            strokeLinecap="square"
           />
+        ))}
+        {/* Líneas de comparación entre cada par seleccionado: por encima del
+            pedigree, debajo de los nodos. La línea tiene pointerEvents none
+            (no interceptea clicks) pero el label sí — al clickearlo abre el
+            modal de tripleta con detalles del par + opción de agregar tercero. */}
+        {comparisonLines.map((c) => (
+          <g key={c.key} data-pair-key={c.key}>
+            <line
+              x1={c.line.x1}
+              y1={c.line.y1}
+              x2={c.line.x2}
+              y2={c.line.y2}
+              stroke="#d97706"
+              strokeWidth={4}
+              strokeLinecap="round"
+              opacity={0.85}
+              pointerEvents="none"
+            />
+            <ComparisonLabel
+              x={(c.line.x1 + c.line.x2) / 2}
+              y={(c.line.y1 + c.line.y2) / 2}
+              cosine={c.cosine}
+              isComputing={isComputing && c.cosine === null}
+              onClick={
+                c.cosine !== null
+                  ? () => onCosineClick(c.aId, c.bId, c.cosine as number)
+                  : undefined
+              }
+            />
+          </g>
         ))}
         {/* Nodos. */}
         {persons.map((p) => {
           const pp = pos.get(p.id);
           if (!pp) return null;
+          const idx = selectedForCompare.indexOf(p.id);
           return (
             <PersonNode
               key={p.id}
@@ -844,8 +988,7 @@ function PedigreeSvg({
               photoUrl={p.photoSha256 ? photoUrls.get(p.photoSha256) ?? null : null}
               isSelected={p.id === selectedPersonId}
               isDragOver={p.id === dragOverPersonId}
-              isP1={p.id === p1Id}
-              isP2={p.id === p2Id}
+              selectionIndex={idx >= 0 ? idx : null}
               onSelect={onSelect}
               onUploadPhoto={onUploadPhoto}
               onDragOverPerson={onDragOverPerson}
@@ -874,9 +1017,9 @@ interface PersonNodeProps {
   photoUrl: string | null;
   isSelected: boolean;
   isDragOver: boolean;
-  isP1: boolean;
-  isP2: boolean;
-  onSelect: (id: PersonId) => void;
+  /** 0-based index del nodo en la lista de seleccionados para comparar; null si no está seleccionado. */
+  selectionIndex: number | null;
+  onSelect: (id: PersonId, withModifier: boolean) => void;
   onUploadPhoto: (id: PersonId, file: File) => void;
   onDragOverPerson: (id: PersonId | null) => void;
 }
@@ -889,8 +1032,7 @@ function PersonNode({
   photoUrl,
   isSelected,
   isDragOver,
-  isP1,
-  isP2,
+  selectionIndex,
   onSelect,
   onUploadPhoto,
   onDragOverPerson,
@@ -918,28 +1060,27 @@ function PersonNode({
   // para que el browser respete el click → file picker.
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Prioridad visual: dragOver > P2 (verde) > P1 (azul fuerte) > selected (azul claro) > default.
-  // P1/P2 ganan a `selected` porque el modo comparación reusa el mismo handler
-  // de click; mientras está on, selected no debería tener fuerza visual.
+  // Prioridad visual: dragOver > selected-for-compare (naranja) > selected
+  // para detalle (azul) > default. Todos los nodos seleccionados para comparar
+  // comparten el mismo color naranja; los distingue el badge numerado.
+  const isInCompare = selectionIndex !== null;
+  const COMPARE_COLOR = '#d97706';
+  const COMPARE_BG = '#fff3e0';
   const stroke = isDragOver
     ? '#0a0'
-    : isP2
-      ? '#0a8a3a'
-      : isP1
-        ? '#0044cc'
-        : isSelected
-          ? '#1a73e8'
-          : '#bbb';
-  const strokeWidth = isDragOver || isP1 || isP2 ? 3 : isSelected ? 2 : 1;
+    : isInCompare
+      ? COMPARE_COLOR
+      : isSelected
+        ? '#1a73e8'
+        : '#bbb';
+  const strokeWidth = isDragOver || isInCompare ? 3 : isSelected ? 2 : 1;
   const bg = isDragOver
     ? '#eaffea'
-    : isP2
-      ? '#e0f5e7'
-      : isP1
-        ? '#dde6ff'
-        : isSelected
-          ? '#eaf3ff'
-          : '#fff';
+    : isInCompare
+      ? COMPARE_BG
+      : isSelected
+        ? '#eaf3ff'
+        : '#fff';
 
   // Refs colgadas: marcar visualmente si la persona tiene padres apuntando
   // a alguien que no existe (parent fue borrado). Triangulito rojo arriba-der.
@@ -950,11 +1091,9 @@ function PersonNode({
   const photoX = x + (BOX_W - PHOTO_SIZE) / 2;
   const photoY = y + 10;
 
-  const ariaLabel = isP1
-    ? `${person.name} · P1`
-    : isP2
-      ? `${person.name} · P2`
-      : person.name;
+  const ariaLabel = isInCompare
+    ? `${person.name} · sel ${(selectionIndex as number) + 1}`
+    : person.name;
 
   return (
     <g
@@ -975,7 +1114,7 @@ function PersonNode({
         stroke={stroke}
         strokeWidth={strokeWidth}
         style={{ cursor: 'pointer' }}
-        onClick={() => onSelect(person.id)}
+        onClick={(e) => onSelect(person.id, e.ctrlKey || e.metaKey)}
       />
       {/* Área de foto: click sobre acá abre file picker (no selecciona). */}
       <g
@@ -1044,26 +1183,28 @@ function PersonNode({
           ⚠
         </text>
       )}
-      {/* Badge P1/P2 esquina superior izquierda en modo comparación. */}
-      {(isP1 || isP2) && (
+      {/* Badge numerado esquina superior izquierda cuando el nodo está en
+          la lista de comparación. El número refleja el orden de selección
+          (1-based: el primer ctrl+click es 1). */}
+      {isInCompare && (
         <g pointerEvents="none">
           <rect
             x={x + 4}
             y={y + 4}
-            width={22}
-            height={16}
-            rx={3}
-            fill={isP2 ? '#0a8a3a' : '#0044cc'}
+            width={20}
+            height={20}
+            rx={10}
+            fill={COMPARE_COLOR}
           />
           <text
-            x={x + 4 + 11}
-            y={y + 4 + 12}
+            x={x + 4 + 10}
+            y={y + 4 + 14}
             textAnchor="middle"
-            fontSize={11}
+            fontSize={12}
             fontWeight={700}
             fill="#fff"
           >
-            {isP1 ? 'P1' : 'P2'}
+            {(selectionIndex as number) + 1}
           </text>
         </g>
       )}
@@ -1224,211 +1365,127 @@ function PersonDetailPanel({
 }
 
 // -----------------------------------------
-// Panel "Comparación": muestra el resultado del cómputo actual (foto P1,
-// foto P2, cosine grande, botón ↻ recompute) + historial persistido del
-// árbol. Se renderiza junto al PersonDetailPanel cuando el modo comparación
-// está ON; ambos viven en un flex row del componente principal.
+// Geometría: dado el rect (x, y, BOX_W, BOX_H) de dos nodos, devolver el
+// segmento "centro-a-centro" recortado contra los bordes de ambos rects.
+// Así la línea de comparación termina sobre los bordes y no atraviesa la
+// caja. Para nodos en la misma generación (línea horizontal) recorta sobre
+// los lados verticales; para nodos en distintas (línea diagonal) recorta
+// donde toque cada lado.
 //
-// Sobre el historial:
-//   - Ordenado más reciente primero.
-//   - Cada entrada muestra los nombres P1/P2 (o "(borrado)" si la persona
-//     ya no existe), el cosine y la fecha relativa.
-//   - Marcado "stale" si la photoSha256 actual de la persona difiere del
-//     snapshot guardado en la Comparison: la comparación sigue siendo
-//     válida para esas fotos, pero esas fotos ya no son las que la persona
-//     tiene asignadas hoy.
-//   - Botón ✕ para borrar entrada individual.
+// Algoritmo: parametrizamos la línea entre los centros con t en [0,1].
+// Buscamos el primer t > 0 donde la línea cruza un lado del rect de origen
+// (saliendo), y el último t < 1 donde la línea cruza un lado del rect de
+// destino (entrando). Si los centros coinciden (caso degenerado por bug
+// de posiciones), devolvemos null.
 // -----------------------------------------
 
-interface ComparisonPanelProps {
-  p1: Person | null;
-  p2: Person | null;
-  photoUrls: Map<string, string>;
-  currentCosine: number | null;
+interface LineSeg { x1: number; y1: number; x2: number; y2: number }
+
+function clipLineBetweenBoxes(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  w: number,
+  h: number,
+): LineSeg | null {
+  const cax = a.x + w / 2;
+  const cay = a.y + h / 2;
+  const cbx = b.x + w / 2;
+  const cby = b.y + h / 2;
+  const dx = cbx - cax;
+  const dy = cby - cay;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return null;
+
+  // Para un rect (rx, ry, rx+w, ry+h) y la línea (cax+t*dx, cay+t*dy),
+  // las intersecciones son t = (rx - cax)/dx, (rx+w - cax)/dx,
+  // (ry - cay)/dy, (ry+h - cay)/dy (sólo si dx≠0 / dy≠0).
+  // Para la caja de salida (a), buscamos el menor t > 0 que cae en el rect.
+  // Para la de entrada (b), buscamos el mayor t < 1 que cae en el rect.
+
+  const intersect = (rx: number, ry: number, originAtStart: boolean) => {
+    const candidates: number[] = [];
+    if (Math.abs(dx) > 1e-6) {
+      candidates.push((rx - cax) / dx);
+      candidates.push((rx + w - cax) / dx);
+    }
+    if (Math.abs(dy) > 1e-6) {
+      candidates.push((ry - cay) / dy);
+      candidates.push((ry + h - cay) / dy);
+    }
+    // Filtrar a los que efectivamente caen dentro del rect.
+    const valid = candidates.filter((t) => {
+      const px = cax + t * dx;
+      const py = cay + t * dy;
+      return px >= rx - 1e-6 && px <= rx + w + 1e-6 && py >= ry - 1e-6 && py <= ry + h + 1e-6;
+    });
+    if (valid.length === 0) return null;
+    return originAtStart ? Math.max(...valid) : Math.min(...valid);
+  };
+
+  const tStart = intersect(a.x, a.y, true);   // mayor t dentro del rect A (salida)
+  const tEnd = intersect(b.x, b.y, false);    // menor t dentro del rect B (entrada)
+  if (tStart === null || tEnd === null || tStart >= tEnd) return null;
+
+  return {
+    x1: cax + tStart * dx,
+    y1: cay + tStart * dy,
+    x2: cax + tEnd * dx,
+    y2: cay + tEnd * dy,
+  };
+}
+
+// -----------------------------------------
+// Label flotante del cosine sobre la línea P1↔P2. Rect blanco redondeado
+// con borde naranja, número en monoespaciado adentro. Centrado en el
+// midpoint de la línea y un poco desplazado vertical para no pisar la
+// línea con el texto.
+// -----------------------------------------
+
+interface ComparisonLabelProps {
+  x: number;
+  y: number;
+  cosine: number | null;
   isComputing: boolean;
-  comparisons: Comparison[];
-  personsById: Map<PersonId, Person>;
-  onRecompute: () => void;
-  onDeleteComparison: (id: string) => void;
+  /** Si se provee, el label es clickeable y abre el modal de tripleta. */
+  onClick?: () => void;
 }
 
-function ComparisonPanel({
-  p1,
-  p2,
-  photoUrls,
-  currentCosine,
-  isComputing,
-  comparisons,
-  personsById,
-  onRecompute,
-  onDeleteComparison,
-}: ComparisonPanelProps) {
-  const p1Photo = p1?.photoSha256 ? photoUrls.get(p1.photoSha256) ?? null : null;
-  const p2Photo = p2?.photoSha256 ? photoUrls.get(p2.photoSha256) ?? null : null;
-
+function ComparisonLabel({ x, y, cosine, isComputing, onClick }: ComparisonLabelProps) {
+  const text = isComputing ? '…' : cosine === null ? '—' : cosine.toFixed(4);
+  const w = 70;
+  const h = 24;
+  const isClickable = onClick !== undefined;
   return (
-    <div style={comparisonPanelStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <h3 style={{ margin: 0 }}>Comparación</h3>
-        <button
-          onClick={onRecompute}
-          disabled={!p1 || !p2 || isComputing}
-          style={{ fontSize: 12 }}
-          title="Re-computar ignorando embeddings cacheados"
-        >
-          ↻ recompute
-        </button>
-      </div>
-
-      {/* Dos fotos lado a lado + cosine en el medio. */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        <ComparisonSlot label="P1" person={p1} photoUrl={p1Photo} color="#0044cc" />
-        <div style={{ flex: '0 0 auto', textAlign: 'center', minWidth: 70 }}>
-          <div style={{ fontSize: 11, color: '#666' }}>cosine</div>
-          <div
-            data-testid="cosine-value"
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: currentCosine === null ? '#bbb' : '#222',
-              fontFamily: 'monospace',
-            }}
-          >
-            {isComputing ? '…' : currentCosine === null ? '—' : currentCosine.toFixed(4)}
-          </div>
-        </div>
-        <ComparisonSlot label="P2" person={p2} photoUrl={p2Photo} color="#0a8a3a" />
-      </div>
-
-      {/* Historial. */}
-      <div>
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
-          Historial ({comparisons.length})
-        </div>
-        {comparisons.length === 0 && (
-          <p style={{ color: '#aaa', fontSize: 12, margin: 0 }}>
-            Sin comparaciones guardadas todavía.
-          </p>
-        )}
-        {comparisons.length > 0 && (
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              maxHeight: 200,
-              overflowY: 'auto',
-              border: '1px solid #eee',
-              borderRadius: 3,
-            }}
-          >
-            {comparisons.map((c) => {
-              const cp1 = personsById.get(c.p1Id);
-              const cp2 = personsById.get(c.p2Id);
-              const p1Stale = cp1 != null && cp1.photoSha256 !== c.p1Sha256;
-              const p2Stale = cp2 != null && cp2.photoSha256 !== c.p2Sha256;
-              const stale = p1Stale || p2Stale;
-              return (
-                <li
-                  key={c.id}
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    padding: '4px 8px',
-                    borderBottom: '1px solid #f4f4f4',
-                    alignItems: 'center',
-                    fontSize: 12,
-                  }}
-                >
-                  <span style={{ flex: 1, color: '#333' }}>
-                    {cp1 ? cp1.name : <em style={{ color: '#aaa' }}>(borrado)</em>}{' '}
-                    ↔ {cp2 ? cp2.name : <em style={{ color: '#aaa' }}>(borrado)</em>}
-                    {stale && (
-                      <span title="La foto asignada a una de las personas cambió desde este cómputo" style={{ marginLeft: 6, color: '#c80', fontSize: 11 }}>
-                        ⚠ stale
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ fontFamily: 'monospace', minWidth: 60, textAlign: 'right' }}>
-                    {c.cosine.toFixed(4)}
-                  </span>
-                  <span style={{ color: '#888', fontSize: 11, minWidth: 80, textAlign: 'right' }}>
-                    {formatRelative(c.computedAt)}
-                  </span>
-                  <button
-                    onClick={() => onDeleteComparison(c.id)}
-                    title="Borrar esta comparación"
-                    style={{ fontSize: 11, padding: '0 6px' }}
-                  >
-                    ✕
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface ComparisonSlotProps {
-  label: string;
-  person: Person | null;
-  photoUrl: string | null;
-  color: string;
-}
-
-function ComparisonSlot({ label, person, photoUrl, color }: ComparisonSlotProps) {
-  return (
-    <div style={{ flex: 1, textAlign: 'center', minWidth: 90 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color }}>{label}</div>
-      <div
-        style={{
-          width: 96,
-          height: 96,
-          margin: '4px auto',
-          border: `2px solid ${person ? color : '#ddd'}`,
-          borderRadius: 4,
-          background: '#fafafa',
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+    <g
+      data-testid="cosine-svg-label"
+      onClick={onClick}
+      style={isClickable ? { cursor: 'pointer' } : undefined}
+    >
+      <title>{isClickable ? 'Click para ver detalles + agregar tercero' : ''}</title>
+      <rect
+        x={x - w / 2}
+        y={y - h / 2}
+        width={w}
+        height={h}
+        rx={4}
+        fill="#fff"
+        stroke="#d97706"
+        strokeWidth={1.5}
+      />
+      <text
+        x={x}
+        y={y + 5}
+        textAnchor="middle"
+        fontSize={13}
+        fontWeight={700}
+        fontFamily="monospace"
+        fill="#222"
+        data-testid="cosine-value"
+        pointerEvents="none"
       >
-        {photoUrl ? (
-          <img
-            src={photoUrl}
-            alt={person?.name ?? label}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <span style={{ color: '#aaa', fontSize: 11 }}>
-            {person ? 'sin foto' : '—'}
-          </span>
-        )}
-      </div>
-      <div style={{ fontSize: 12, fontWeight: 500, color: '#333', minHeight: 16 }}>
-        {person ? truncate(person.name, 18) : '—'}
-      </div>
-    </div>
+        {text}
+      </text>
+    </g>
   );
-}
-
-// Formato de fecha relativo simple. Para algo más rico habría que sumar
-// `Intl.RelativeTimeFormat`, pero no vale la pena por unas líneas de UI.
-function formatRelative(ts: number): string {
-  const dMs = Date.now() - ts;
-  const dSec = Math.floor(dMs / 1000);
-  if (dSec < 60) return 'hace seg';
-  const dMin = Math.floor(dSec / 60);
-  if (dMin < 60) return `hace ${dMin}m`;
-  const dHr = Math.floor(dMin / 60);
-  if (dHr < 24) return `hace ${dHr}h`;
-  const dDay = Math.floor(dHr / 24);
-  if (dDay < 30) return `hace ${dDay}d`;
-  return new Date(ts).toLocaleDateString();
 }
 
 // -----------------------------------------
@@ -1458,15 +1515,9 @@ const errorStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
+  marginTop: 16,
   padding: 16,
   border: '1px solid #1a73e8',
   borderRadius: 4,
   background: '#f4f8ff',
-};
-
-const comparisonPanelStyle: React.CSSProperties = {
-  padding: 16,
-  border: '1px solid #c89000',
-  borderRadius: 4,
-  background: '#fffaf0',
 };
