@@ -1,21 +1,29 @@
 // =========================================
 // ID: PHYLOFACE_LIB_TREESTORE
-// VERSION: v1.0
+// VERSION: v1.1
 // =========================================
+// Cambio v1.0 → v1.1 (Tarea #26 paso 5 — comparación on-demand):
+// - DB_VERSION bump 1 → 2. `onupgradeneeded` ahora también crea el store
+//   `comparisons` (keyPath: id, índice by-tree → treeId). Idempotente: el
+//   check `contains` cubre tanto upgrades desde v1 como instalaciones nuevas.
+// - Helpers nuevos: saveComparison / listComparisons / deleteComparison.
+//   listComparisons filtra por treeId vía índice (igual patrón que persons).
+//
 // Capa de persistencia IndexedDB para el Track 2b (Tarea #26). Wrappea la API
 // nativa de IDB con promesas; no agrega deps al cliente.
 //
 // Por qué IDB nativo y no `idb` (Jake Archibald) u otra librería:
 //   - 0 KB de bundle extra.
-//   - El surface que usamos es chico (3 stores, ~10 operaciones), el wrapper
-//     queda en < 200 LOC.
+//   - El surface que usamos es chico (4 stores, ~13 operaciones), el wrapper
+//     queda en < 250 LOC.
 //   - Si en el futuro el surface crece (transacciones cross-store anidadas,
 //     cursors complejos, migraciones), reevaluar `idb`.
 //
-// Estructura de la DB (`phyloface-genealogy`, version 1):
-//   - trees   (keyPath: id)
-//   - persons (keyPath: id, index: by-tree → treeId)
-//   - photos  (keyPath: sha256)
+// Estructura de la DB (`phyloface-genealogy`, version 2):
+//   - trees       (keyPath: id)
+//   - persons     (keyPath: id, index: by-tree → treeId)
+//   - photos      (keyPath: sha256)
+//   - comparisons (keyPath: id, index: by-tree → treeId)
 //
 // Decisiones de diseño:
 //   - **Dedup natural**: putPhoto(blob) calcula sha256 internamente y devuelve
@@ -35,6 +43,8 @@
 //     compuesta (ej. importar árbol completo), se hará una helper específica.
 
 import type {
+  Comparison,
+  ComparisonId,
   Person,
   PersonId,
   PhotoRecord,
@@ -45,12 +55,14 @@ import type {
 import { sha256OfBlob } from './genealogy';
 
 const DB_NAME = 'phyloface-genealogy';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_TREES = 'trees';
 const STORE_PERSONS = 'persons';
 const STORE_PHOTOS = 'photos';
+const STORE_COMPARISONS = 'comparisons';
 const INDEX_PERSONS_BY_TREE = 'by-tree';
+const INDEX_COMPARISONS_BY_TREE = 'by-tree';
 
 // -----------------------------------------
 // Apertura de DB (cacheada).
@@ -75,6 +87,12 @@ export function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_PHOTOS)) {
         db.createObjectStore(STORE_PHOTOS, { keyPath: 'sha256' });
+      }
+      // Agregado en v2 (Tarea #26 paso 5). El `contains` cubre tanto upgrade
+      // desde v1 como instalación nueva.
+      if (!db.objectStoreNames.contains(STORE_COMPARISONS)) {
+        const store = db.createObjectStore(STORE_COMPARISONS, { keyPath: 'id' });
+        store.createIndex(INDEX_COMPARISONS_BY_TREE, 'treeId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -246,4 +264,27 @@ export async function setPhotoEmbedding(
   const db = await openDb();
   const tx = db.transaction(STORE_PHOTOS, 'readwrite');
   await req(tx.objectStore(STORE_PHOTOS).put(updated));
+}
+
+// -----------------------------------------
+// Comparisons CRUD (Tarea #26 paso 5)
+// -----------------------------------------
+
+export async function saveComparison(comp: Comparison): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(STORE_COMPARISONS, 'readwrite');
+  await req(tx.objectStore(STORE_COMPARISONS).put(comp));
+}
+
+export async function listComparisons(treeId: TreeId): Promise<Comparison[]> {
+  const db = await openDb();
+  const tx = db.transaction(STORE_COMPARISONS, 'readonly');
+  const idx = tx.objectStore(STORE_COMPARISONS).index(INDEX_COMPARISONS_BY_TREE);
+  return req<Comparison[]>(idx.getAll(treeId));
+}
+
+export async function deleteComparison(id: ComparisonId): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(STORE_COMPARISONS, 'readwrite');
+  await req(tx.objectStore(STORE_COMPARISONS).delete(id));
 }

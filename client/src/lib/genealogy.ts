@@ -1,7 +1,15 @@
 // =========================================
 // ID: PHYLOFACE_LIB_GENEALOGY
-// VERSION: v1.0
+// VERSION: v1.1
 // =========================================
+// Cambio v1.0 → v1.1 (Tarea #26 paso 5 — comparación on-demand):
+// - Agregado `ComparisonId` + `Comparison` interface + `newComparison(...)`.
+//   Una Comparison persiste el resultado de comparar dos Person del mismo
+//   Tree: guarda los `*Sha256` snapshot al momento del cómputo (porque la
+//   foto de una persona puede cambiar después y queremos que el historial
+//   refleje qué se comparó, no el estado actual). El `cosine` se calcula
+//   con los embeddings cacheados en PhotoRecord.embedding.
+//
 // Modelo de datos puro para el Track 2b (Tarea #26 — comparador con árbol
 // genealógico). Sin dependencias del DOM ni de IndexedDB: tipos + helpers
 // determinísticos. La capa de persistencia vive en `lib/treeStore.ts`.
@@ -34,6 +42,7 @@
 
 export type PersonId = string;
 export type TreeId = string;
+export type ComparisonId = string;
 
 /** Hash hex lowercase, 64 chars (SHA-256). */
 export type Sha256Hex = string;
@@ -57,6 +66,26 @@ export interface Tree {
   name: string;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * Resultado persistido de comparar dos personas. Snapshotea los sha256 al
+ * momento del cómputo: si después le cambian la foto a P1 o P2, esta
+ * Comparison sigue representando el cálculo original. El historial UI puede
+ * marcarlas como "stale" comparando p{1,2}Sha256 contra la photoSha256
+ * actual de la persona.
+ */
+export interface Comparison {
+  id: ComparisonId;
+  treeId: TreeId;
+  p1Id: PersonId;
+  p2Id: PersonId;
+  p1Sha256: Sha256Hex;
+  p2Sha256: Sha256Hex;
+  /** cosineSimilarity de los embeddings ArcFace 512-d (no L2-normalizados). */
+  cosine: number;
+  /** Timestamp ms epoch. */
+  computedAt: number;
 }
 
 /**
@@ -93,6 +122,26 @@ export function newTree(name: string): Tree {
     name: name.trim() || 'Sin nombre',
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+export function newComparison(
+  treeId: TreeId,
+  p1Id: PersonId,
+  p2Id: PersonId,
+  p1Sha256: Sha256Hex,
+  p2Sha256: Sha256Hex,
+  cosine: number,
+): Comparison {
+  return {
+    id: newId(),
+    treeId,
+    p1Id,
+    p2Id,
+    p1Sha256,
+    p2Sha256,
+    cosine,
+    computedAt: Date.now(),
   };
 }
 
