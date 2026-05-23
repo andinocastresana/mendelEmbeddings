@@ -11,6 +11,50 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-23
 
+### `ec1d88f` · Track 2b paso 5 iter B+C — pedigree canónico + ctrl+click + multi-selección + modal de tripleta + handoff al Comparador MVP `T26`
+
+**Refinamiento del paso 5 inicial (`bac4fac`) en 2 sub-iteraciones disparadas por feedback del usuario durante el flow.** Cierra la última iteración del paso 5 de la Tarea #26; resta sólo el paso 6 (export/import). Varias decisiones de UX de `bac4fac` quedaron **reemplazadas** acá (ver abajo): el toggle "Modo comparación" → Ctrl/Cmd+click; el `ComparisonPanel` lateral → línea con cosine sobre el SVG; el par fijo P1/P2 → multi-selección N nodos.
+
+**Iter B — pedigree canónico + ctrl+click + cosine sobre línea (`GenealogyTree.tsx` v3.0):**
+
+- **Render canónico tipo pedigree clínico**: agrupa hijos por par `(fatherId, motherId)` y dibuja (1) línea horizontal de **unión** entre padres a la altura del bottom del más bajo + stubs verticales para igualar altura si están en gens distintas; (2) **vertical** desde el centro de la unión hasta el sib-bus; (3) **horizontal** del sib-bus abarcando todos los hijos del par + el punto de bajada; (4) **vertical** desde el bus al top de cada hijo. Hermanos completos comparten bus; half-sibs tienen buses separados. Padres dangling se ignoran (el ⚠ del nodo ya marca el problema). Reemplaza el render v2.0 de diagonales padre→hijo.
+- **Ctrl/Cmd+click** reemplaza el toggle "Modo comparación". Click normal sigue abriendo el panel detalle; el estado `comparisonMode` desaparece — el modifier en cada click manda.
+- **Línea naranja gruesa con cosine flotante sobre el midpoint** en el SVG reemplaza el `ComparisonPanel` lateral. El segmento se recorta contra los rects de las dos cajas vía `clipLineBetweenBoxes`.
+
+**Iter C — multi-selección + modal de tripleta + handoff:**
+
+- **`selectedForCompare: PersonId[]`** reemplaza el par fijo `p1Id/p2Id`. Ctrl+click hace toggle (agrega/saca). Para N seleccionados se dibujan `N*(N-1)/2` líneas con sus cosines (`cosineByPair: Map<pairKey, number>`); badges naranjas numerados `1..N` por orden de selección. Quitar un nodo poda las entries del map que lo involucran.
+- **Click sobre cualquier label de cosine → modal de tripleta** con detalles del par.
+- **`TripletModal.tsx` (nuevo)**: modal flotante (overlay sobre el SVG; backdrop click + ESC cierran). 3 slots `A · (C opcional) · B` con foto + dropdown de rol. **Inferencia automática de roles** desde el árbol: si el seleccionado es hijo de los otros dos (`fatherId`/`motherId`) se etiqueta Hijo/a con Padre/Madre según el campo apuntado; sino default Padre/Madre/Hijo. Override vía `ROLE_OPTIONS_TRIPLET`. El tercero se elige por dropdown de personas del árbol con foto (`photoSha256 !== null`, excluye el par inicial). Computa cosines extras (A↔C, B↔C) reusando el mismo `ensureEmbedding` cacheado en IDB (`setPhotoEmbedding`). Botón **"→ abrir en Comparador MVP"** hace el handoff cross-tab.
+- **`Comparator.tsx` v2.2 → v2.3**: al montar lee `localStorage["phyloface-comparator-prefill"]`; si es válido (`v:1`, `age<60s`, shape OK) carga los blobs apuntados por sha256 desde `treeStore.getPhoto()` y los precarga como `File` en los slots, restaurando también roles laterales. La key se borra al consumir (one-shot).
+- **`App.tsx` v1.2 → v1.3**: listener `window` para `CustomEvent("phyloface-go-to-tab", { detail })`, que permite al `TripletModal` saltar al tab Comparador sin prop drilling ni store global.
+
+**Detalles no obvios:**
+
+- Línea de unión entre padres con **stubs verticales** cuando están en gens distintas — caso raro, pero el algoritmo no asume mismo bottom-Y para ambos.
+- El `cosineByPair` **no** se re-puebla al cambiar de árbol (se podan todos los pares vía `resetComparisonSelection`). El effect que recarga las comparisons persistidas quedó del paso 5 iter A — sin UI todavía, pero la data persiste en IDB.
+- Patrón "mover `setError` al IIFE async para silenciar `set-state-in-effect`" aplicado en `TripletModal.tsx` (el linter no marca setState en microtareas).
+- El `TripletModal` **no** inyecta los cosines computados de vuelta al `cosineByPair` del árbol: el modal es una vista "como si" se seleccionaran los 3, sin contaminar la selección viva.
+
+**Episodio KG capturado (`_global`):** `2026-05-23-cross-tab-handoff-via-localstorage-and-custom-event` — patrón: separar **datos** (localStorage one-shot, consume-and-remove, versionado, TTL por timestamp) de **señal de vista** (CustomEvent en window). Disciplina: validar shape antes de consumir + smoke cross-component e2e obligatorio. Hermano-prior dual de `2026-05-18-master-indexes-are-stale-by-default` y simétrico de [[2026-05-22-react-cleanup-gpu-wasm-resources-or-leak]].
+
+**Smoke `genealogy-paso5-smoke.mjs` reescrito:**
+
+- 3 personas (Bruno padre, Mateo madre, Hijo) para ejercitar el bus canónico.
+- Ctrl+click sucesivos: 1 → 2 (1 cosine = `0.2302`) → 3 (3 cosines `[0.2302, 0.0189, -0.0341]`) → quitar Mateo (queda 1 par).
+- Click sobre label Bruno↔Mateo → modal abierto con cosine cacheado correcto.
+- Agregar tercero (Hijo) → modal muestra 3 cosines idénticos a los del árbol (reuso de embeddings cacheados).
+- Click "→ Comparador MVP" → tab cambia (h1 "Comparador anónimo" visible) + 3 slots precargados (≥3 `<img>`). Screenshot: Padre=Bruno, Hijo/a=Hijo, Madre=Mateo con roles correctos.
+
+**Validación:**
+
+- `tsc --noEmit`: PASS.
+- `eslint`: 1 error preexistente (`reloadPersons` con `set-state-in-effect`, ya en v2.0); 0 regresiones nuevas.
+- Smoke headless: PASS end-to-end incluyendo cross-tab.
+- Screenshots `/tmp/genealogy-p5-{04,05,06,07}-*.png` leídos multimodalmente: 3 líneas naranjas con cosines en el árbol, modal con triángulo de comparaciones, Comparador prellenado.
+
+**Estado del plan #26:** pasos 1+2+3+4+5 cerrados (paso 5 en 3 sub-iteraciones: `bac4fac` base + iter B + iter C). **Próximo: paso 6** — export/import JSON+base64 del árbol completo. Decisiones abiertas: embeddings sí/no en el export (caching vs portabilidad), historial sí/no, import como árbol nuevo siempre o agregar al activo.
+
 ### `bac4fac` · Track 2b paso 5 — comparación on-demand entre 2 nodos del árbol (cosine + historial persistido) `T26`
 
 **Cierra el paso 5 del plan de la Tarea #26** (de 6 pasos). Extiende `GenealogyTree.tsx` con un modo comparación que computa el cosine ArcFace entre las fotos de dos personas del árbol, reusando `lib/pipeline.ts` (Face Mesh → align canónico 112×112 → ONNX w600k_r50), cacheando embeddings por SHA-256 en IndexedDB y persistiendo cada comparación como entrada del historial filtrado por treeId.
