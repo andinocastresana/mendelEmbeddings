@@ -11,6 +11,69 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-23
 
+### `cc4a029` · Tarea #6 Fase A — calibración de umbrales de parentesco sobre KinFaceW-I `T6`
+
+**Arranca la Tarea #6 (calibración data-driven de umbrales).** Convierte el
+cosine crudo del comparador/árbol en un veredicto de parentesco con respaldo
+cuantitativo. Fase A = calibración Python; Fase B (visualización web:
+histogramas + modal) queda para otra sesión.
+
+**Decisión de de-risking primero:** spike (`scripts/spike_kinfacew_embeddings.py`)
+antes del protocolo completo, para resolver la "advertencia 64px" — las imágenes
+de KinFaceW vienen recortadas/alineadas a 64×64; en vez de correr detección Face
+Mesh sobre 64px (poco confiable), se tratan como **ya alineadas** y se llevan a
+112×112 RGB directo a `extract_embedding_from_aligned`. El spike confirmó señal
+(AUC rank-based ~0.74) → vía libre al protocolo.
+
+**Resultados KinFaceW-I** (coseno crudo ArcFace `w600k_r50`, 5-fold CV oficial,
+umbral de Youden por relación) — baseline honesto:
+
+| relación | n_pos | acc 5-CV | umbral | AUC |
+|---|---|---|---|---|
+| Father-Son | 156 | 73.1% | 0.123 | 0.812 |
+| Mother-Daughter | 127 | 65.5% | 0.231 | 0.746 |
+| Father-Daughter | 134 | 62.4% | 0.108 | 0.677 |
+| Mother-Son | 116 | 59.9% | 0.173 | 0.681 |
+| **ALL** | 533 | **66.6%** | 0.138 | **0.727** |
+
+En línea con NRML clásico (72-77%); el SOTA ~81% (FaCoRNet) requiere cabeza
+aprendida. **Umbrales muy distintos por relación** (0.108-0.231) → calibrar por
+relación era necesario; cross-género (FD/MS) sistemáticamente peor.
+
+**Cambios de código:**
+- **`src/phyloface/benchmark/`** (nuevo subpaquete, área B): `kinfacew.py`
+  (loader que parsea `meta_data/*_pairs.mat` desde el zip — folds + pares
+  oficiales — y decodifica caras como pre-alineadas 112×112) + `calibration.py`
+  (lógica pura solo-numpy: AUC rank-based, umbral de Youden, 5-fold CV
+  dirección-aware coseno↑/euclídea↓, histograma pre-binneado).
+- **`src/phyloface/core/embedder.py`** v1.0→v1.1: `load_recognition_only()`
+  carga solo el submodelo ArcFace vía `model_zoo.get_model`, evitando los 4
+  submodelos extra de buffalo_l (menos RAM/calor para correr miles de caras).
+- **`scripts/run_calibration_kinfacew.py`**: runner Fase A — embeddings con
+  cache + **batching adaptativo a temperatura** (lee `/sys/class/thermal`, pausa
+  6s sobre 85°C), calibración por relación + ALL, emisión del artefacto JSON
+  (`data/output/calibration/`, gitignored) con umbrales/AUC/histogramas para
+  coseno y euclídea — contrato hacia la Fase B.
+- **`scripts/test-monitored.sh`**: wrapper de monitoreo de recursos para
+  corridas que terminan (hermano de `dev-monitored.sh`); cumple la regla nueva
+  de monitorear+loguear todo test automático. Imprime resumen al cierre.
+  `.test-resources*` gitignored.
+- **`_meta/CALIBRACION_TAREA6.md`**: procedimiento documentado.
+- **`_meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md`**: informe de un agente de
+  investigación en background (web) — datasets/protocolos, tabla SOTA, mejoras
+  rankeadas (cabeza MLP +7-15pts y portable a cliente, scoring tri-subject,
+  fusión regional), pitfalls (sesgo "same-photo" de KinFaceW-II → evaluar -I
+  como métrica primaria).
+- `.claude/settings.json`: allowlist read-only (`unzip -l/-p`, `WebSearch`,
+  `WebFetch`).
+
+**Térmico:** el spike y la corrida completa tocaron 94°C; el batching adaptativo
+del runner activó pausas y la corrida (~1066 imágenes) cerró sin runaway. Todas
+las corridas Python se hicieron vía `test-monitored.sh`.
+
+**Estado de #6:** Fase A cerrada. Resta Fase B (visualización web, otra sesión),
+KinFaceW-II con disclaimer de sesgo, y opcional la cabeza MLP.
+
 ### `59c1243` · Track 2b paso 6 — export/import JSON+base64 del árbol `T26✓`
 
 **Cierra el paso 6 (último) del plan de la Tarea #26 — y con él la tarea completa.** Serialización del árbol entero (Tree + Persons + Photos + Comparisons) a un JSON autocontenido con imágenes en base64, y re-importación creando un árbol nuevo. Sin deps nuevas (`btoa`/`atob`, `Blob` + `<a download>`, `File.text()`).
