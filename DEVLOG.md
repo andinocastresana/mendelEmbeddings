@@ -11,6 +11,44 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-23
 
+### `59c1243` · Track 2b paso 6 — export/import JSON+base64 del árbol `T26✓`
+
+**Cierra el paso 6 (último) del plan de la Tarea #26 — y con él la tarea completa.** Serialización del árbol entero (Tree + Persons + Photos + Comparisons) a un JSON autocontenido con imágenes en base64, y re-importación creando un árbol nuevo. Sin deps nuevas (`btoa`/`atob`, `Blob` + `<a download>`, `File.text()`).
+
+**Decisiones cerradas con el usuario al arrancar el paso** (3 elegidas):
+
+- **Embeddings van en el export, etiquetados con la versión del modelo** a nivel de envelope (`modelVersion`). Toda la app usa un solo modelo, así que un campo por foto sería redundante. Al importar: si la versión del archivo coincide con `MODEL_VERSION` del runtime se reusan (import instantáneo); si no, se descartan (null) y se recomputan lazy en la primera comparación. Resuelve el tradeoff caching vs portabilidad. La UI avisa cuando los descarta.
+- **El historial de comparaciones va en el export** (metadata útil del árbol).
+- **Import crea SIEMPRE un árbol nuevo** (sin merge).
+
+**Cambios de código:**
+
+- **`lib/pipeline.ts` v1.1 → v1.2**: constante exportada `MODEL_VERSION` (`'w600k_r50'`) para etiquetar embeddings. Bumpear si cambia el `.onnx`, el orden de kps, el align o la normalización.
+- **`lib/treeStore.ts` v1.1 → v1.2**: helper `importPhotoRecord(record)` que persiste un `PhotoRecord` completo (con embedding + width/height) dedupeando por sha256 — a diferencia de `putPhoto(blob)` que deja embedding null. Si la foto ya existe localmente NO sobrescribe (el record local gana, puede tener embedding más fresco). Devuelve `true` si insertó, `false` si dedupeó.
+- **`lib/treeExport.ts` (nuevo)**: schema versionado `v:1` (`TreeExportV1`). `buildTreeExport(treeId)` arma el objeto serializable (junta fotos por el sha256 de cada persona + los snapshots de cada comparación), `downloadTreeExport` lo baja a `.json`, `importTreeFromJson(text)` valida + rehidrata. Helpers `blobToBase64` (por chunks de 32k para no reventar el call stack con `String.fromCharCode`) / `base64ToBlob` y `validateExport` (assert del schema con mensajes legibles).
+- **`GenealogyTree.tsx` v3.0 → v3.1**: botones **⬇ Exportar** / **⬆ Importar** en la toolbar de árbol + input file oculto + estado `info` (caja verde) para feedback del import; el `error` existente cubre fallos. Tras importar recarga la lista de árboles y selecciona el nuevo.
+
+**Detalle no obvio — remapeo de ids al importar:** además del `treeId` se remapean TODOS los `PersonId` (+ refs `father`/`mother`) y `ComparisonId` (+ refs `p1`/`p2`). Razón: los `PersonId` son keyPath del store `persons`; importar el mismo archivo dos veces SIN remapear haría que el segundo import pisara las personas del primero (mismo id, distinto treeId) y el primer árbol perdería sus nodos del índice by-tree. El remapeo hace cada import un árbol independiente (idempotente-seguro). Las fotos NO se remapean (content-addressed por sha256 → dedup natural). Refs de padres dangling (apuntan a una persona que no está en el export) se resuelven a `null` — el remapeo limpia la ref colgada como efecto colateral deseable.
+
+**Sobre el roundtrip:** NO es bit-exacto export→import→export porque los ids se regeneran a propósito. El invariante preservado: misma cantidad de personas/fotos/comparaciones, mismos nombres, misma topología de parentesco, mismos bytes de foto (sha256 idéntico), mismos cosines.
+
+**Smoke `genealogy-paso6-smoke.mjs` (nuevo):**
+
+- Construye "Familia Export": Bruno padre + Mateo madre de Hijo, 3 fotos, 1 comparación Bruno↔Mateo (cachea 2 embeddings).
+- ⬇ Exportar → intercepta la descarga, parsea y valida el JSON: `format`/`v`/`modelVersion`, 3 personas, 3 fotos (2 con embedding 512-d), 1 comparación, Hijo conserva padre+madre.
+- ⬆ Importar el mismo JSON vía el file input → lee IndexedDB cruda: 2 árboles, el importado con 3 personas, topología preservada (Hijo→Bruno/Mateo importados), ids remapeados (Bruno importado ≠ original), sha256 de foto preservado, 1 comparación con el mismo cosine, embedding de foto preservado.
+- Doble import → el árbol original conserva sus 3 personas (sin clobber).
+
+**Validación:**
+
+- `tsc -b`: PASS.
+- `eslint`: 1 error preexistente (`reloadPersons` `set-state-in-effect`, ya en v2.0); 0 regresiones nuevas.
+- Smoke headless: PASS end-to-end. cosine Bruno↔Mateo = `0.2302` (firma determinística conocida del paso 5 — sanity check de que el pipeline no se tocó).
+- Screenshot `/tmp/genealogy-p6-02-after-import.png` leído multimodalmente: botones en la toolbar, caja verde "Importado «Familia Export»: 3 personas, 0 fotos (+3 ya existentes), 1 comparación" (las 3 fotos dedupeadas por sha256 contra el árbol original), pedigree importado renderizado con fotos.
+- Recursos monitoreados con `dev-monitored.sh`: baseline ~45°C; pico transitorio 90-93°C / CPU 85% durante los ~30s de la única comparación GPU, vuelta a ~53°C al terminar. El export/import no agrega carga GPU.
+
+**Estado del plan #26:** pasos 1+2+3+4+5+6 cerrados. **Tarea #26 completa.**
+
 ### `ec1d88f` · Track 2b paso 5 iter B+C — pedigree canónico + ctrl+click + multi-selección + modal de tripleta + handoff al Comparador MVP `T26`
 
 **Refinamiento del paso 5 inicial (`bac4fac`) en 2 sub-iteraciones disparadas por feedback del usuario durante el flow.** Cierra la última iteración del paso 5 de la Tarea #26; resta sólo el paso 6 (export/import). Varias decisiones de UX de `bac4fac` quedaron **reemplazadas** acá (ver abajo): el toggle "Modo comparación" → Ctrl/Cmd+click; el `ComparisonPanel` lateral → línea con cosine sobre el SVG; el par fijo P1/P2 → multi-selección N nodos.
