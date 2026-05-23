@@ -1,7 +1,16 @@
 # =========================================
 # ID: PHYLOFACE_EMBEDDER_001
-# VERSION: v1.0
+# VERSION: v1.1
 # =========================================
+# Cambio v1.0 → v1.1 (Tarea #6 — calibración):
+# - `load_recognition_only(model_path)`: carga SOLO el submodelo de
+#   reconocimiento (ArcFace w600k_r50) vía `insightface.model_zoo.get_model`,
+#   sin instanciar el FaceAnalysis completo (que carga detección + landmark_2d
+#   + landmark_3d + genderage, innecesarios cuando ya tenemos caras alineadas).
+#   Menos RAM, menos calor y init más rápido — clave para correr embeddings
+#   sobre miles de caras pre-alineadas de KinFaceW. Devuelve un objeto con
+#   `get_feat`, compatible con `extract_embedding_from_aligned`.
+#
 # Origen de las funciones (migración Tarea #1, Paso 6b):
 #   src/phyloface_experimental_functions.py
 #   - get_recognition_model          (línea 379)
@@ -59,6 +68,47 @@
 
 import cv2
 import numpy as np
+
+
+# =========================================================
+# 0) Cargar SOLO el submodelo de reconocimiento (sin FaceAnalysis completo)
+# =========================================================
+# Para el camino "cara ya alineada → embedding" (calibración #6, KinFaceW) no
+# necesitamos detección/landmark/genderage. Cargar el bundle entero con
+# `init_face_app` desperdicia RAM y calienta de más. Esta función instancia
+# directamente el modelo de reconocimiento desde su .onnx vía el model_zoo de
+# InsightFace, que devuelve un wrapper con `get_feat` (igual interfaz que el
+# submodelo que devuelve `get_recognition_model`).
+# No depende de funciones propias del módulo.
+def load_recognition_only(model_path, ctx_id: int = -1, providers=None):
+    """
+    Carga sólo el submodelo de reconocimiento (ArcFace) desde un .onnx.
+
+    Parámetros:
+        model_path: ruta al .onnx de reconocimiento (ej.
+            ~/.insightface/models/buffalo_l/w600k_r50.onnx).
+        ctx_id: -1 CPU, >=0 GPU.
+        providers: execution providers de ONNX Runtime. None → CPU.
+
+    Devuelve:
+        Modelo con método `get_feat(aligned_bgr)`, usable en
+        `extract_embedding_from_aligned`.
+
+    Lanza:
+        RuntimeError si el modelo cargado no expone `get_feat`.
+    """
+    from insightface.model_zoo import get_model  # import local: dep pesada
+
+    if providers is None:
+        providers = ["CPUExecutionProvider"]
+    model = get_model(str(model_path), providers=providers)
+    # `prepare` fija contexto (CPU/GPU). input_size lo infiere del onnx (112).
+    model.prepare(ctx_id=ctx_id)
+    if not hasattr(model, "get_feat"):
+        raise RuntimeError(
+            f"El modelo cargado desde {model_path} no expone get_feat()."
+        )
+    return model
 
 
 # =========================================================

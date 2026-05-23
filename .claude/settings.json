@@ -3,7 +3,11 @@
     "allow": [
       "Bash(rclone listremotes)",
       "Bash(rclone lsjson *)",
-      "Bash(python3 tests/smoke/*)"
+      "Bash(python3 tests/smoke/*)",
+      "Bash(unzip -l *)",
+      "Bash(unzip -p *)",
+      "WebSearch",
+      "WebFetch"
     ]
   }
 }
