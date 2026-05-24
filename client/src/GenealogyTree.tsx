@@ -1,7 +1,18 @@
 // =========================================
 // ID: PHYLOFACE_GENEALOGY_TREE
-// VERSION: v3.1
+// VERSION: v3.2
 // =========================================
+// Cambio v3.1 → v3.2 (sync bidireccional persistente con el Comparador):
+// - **Árbol → Comparador**: al seleccionar 2-3 nodos con foto (ctrl+click) se
+//   escribe la "tripleta activa" (`lib/activeTriplet.ts`, localStorage) sola.
+//   Abajo del SVG aparece una barra con leyenda de mini-caras + botón
+//   "→ Comparar en tripletes" que salta al Comparador con esos nodos.
+// - **Comparador → Árbol**: al montar, re-hidrata `selectedForCompare` desde
+//   la tripleta activa (si es del árbol actual). Como el Comparador puede haber
+//   creado nodos nuevos (writeback aditivo), `reloadPersons` los trae y
+//   aparecen en el SVG; quedan seleccionados.
+// - "↺ limpiar selección" y el cambio de árbol limpian también la tripleta.
+//
 // Cambio v3.0 → v3.1 (Tarea #26 paso 6 del plan — export/import del árbol):
 // - Dos botones en la toolbar de árbol: **⬇ Exportar** (baja el árbol activo a
 //   un JSON autocontenido — Tree+Persons+Photos en base64+Comparisons) y
@@ -104,6 +115,12 @@ import {
 import { computeTreeLayout } from './lib/treeLayout';
 import { downloadTreeExport, importTreeFromJson } from './lib/treeExport';
 import {
+  readActiveTriplet,
+  writeActiveTriplet,
+  clearActiveTriplet,
+  assignTripletSlots,
+} from './lib/activeTriplet';
+import {
   computeEmbedding,
   cosineSimilarity,
   initFaceLandmarker,
@@ -167,6 +184,9 @@ export default function GenealogyTree() {
   // desmontar — lección [[react-cleanup-gpu-wasm-resources-or-leak]].
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const sessionRef = useRef<InferenceSession | null>(null);
+  // Para hidratar la selección desde la tripleta activa una sola vez por mount
+  // (al volver del Comparador). Ver effect de hidratación más abajo.
+  const hydratedRef = useRef(false);
 
   // -------------------------------------
   // Carga inicial: trees + selección persistida.
@@ -268,6 +288,7 @@ export default function GenealogyTree() {
   const resetComparisonSelection = useCallback(() => {
     setSelectedForCompare([]);
     setCosineByPair(new Map());
+    clearActiveTriplet();
   }, []);
 
   // Key canónica para un par (independiente del orden). Usamos lexicográfico
@@ -410,7 +431,67 @@ export default function GenealogyTree() {
     // detalle. El historial persistido se recarga vía el effect [selectedTreeId].
     resetComparisonSelection();
     setSelectedPersonId(null);
+    // Cambio de árbol manual: permitir re-hidratar desde la tripleta del árbol
+    // nuevo (si la hubiera). El reset ya limpió la tripleta del anterior.
+    hydratedRef.current = false;
   }, [resetComparisonSelection]);
+
+  // -------------------------------------
+  // Sync con el Comparador (tripleta activa, lib/activeTriplet).
+  //
+  // Hidratación: al montar (o al cambiar de árbol), una vez que las personas
+  // están cargadas, si hay una tripleta activa de ESTE árbol, re-seleccionar
+  // esos nodos. Cubre el caso "volví del Comparador, que tal vez creó nodos
+  // nuevos" (reloadPersons ya los trajo). Una sola vez por mount/árbol.
+  // -------------------------------------
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    if (!selectedTreeId || persons.length === 0) return;
+    hydratedRef.current = true;
+    const t = readActiveTriplet();
+    if (!t || t.treeId !== selectedTreeId) return;
+    const ids = t.slots
+      .map((s) => s.personId)
+      .filter((id): id is PersonId => !!id && persons.some((p) => p.id === id));
+    if (ids.length >= 2) {
+      // setState dentro de effect: mismo patrón aceptado que `reloadPersons`.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedForCompare(ids);
+      void computeMissingPairsFor(ids);
+    }
+  }, [persons, selectedTreeId, computeMissingPairsFor]);
+
+  // Persistencia: cuando la selección viva cambia (2-3 nodos con foto), escribir
+  // la tripleta activa para que el Comparador la levante. No reescribe si el
+  // conjunto coincide con lo ya guardado (evita clobberear roles puestos en el
+  // Comparador al sólo navegar/hidratar). No hace setState → sin lint issue.
+  useEffect(() => {
+    if (!selectedTreeId) return;
+    const sel = selectedForCompare
+      .map((id) => persons.find((p) => p.id === id))
+      .filter((p): p is Person => !!p && !!p.photoSha256);
+    if (sel.length < 2) return;
+    const stored = readActiveTriplet();
+    const storedIds = stored && stored.treeId === selectedTreeId
+      ? new Set(stored.slots.map((s) => s.personId))
+      : new Set<string | undefined>();
+    const selIds = new Set(sel.map((p) => p.id));
+    const same = storedIds.size === selIds.size && [...selIds].every((id) => storedIds.has(id));
+    if (same) return;
+    writeActiveTriplet(selectedTreeId, assignTripletSlots(sel.slice(0, 3)));
+  }, [selectedForCompare, persons, selectedTreeId]);
+
+  // Saltar al Comparador con la selección actual como tripleta.
+  const goToTriplets = useCallback(() => {
+    if (!selectedTreeId) return;
+    const sel = selectedForCompare
+      .map((id) => persons.find((p) => p.id === id))
+      .filter((p): p is Person => !!p && !!p.photoSha256)
+      .slice(0, 3);
+    if (sel.length < 2) return;
+    writeActiveTriplet(selectedTreeId, assignTripletSlots(sel));
+    window.dispatchEvent(new CustomEvent('phyloface-go-to-tab', { detail: 'comparator' }));
+  }, [selectedForCompare, persons, selectedTreeId]);
 
   // -------------------------------------
   // Handlers — los mismos que v1.0; sólo el render cambia.
@@ -613,6 +694,12 @@ export default function GenealogyTree() {
     ? persons.find((p) => p.id === selectedPersonId) ?? null
     : null;
 
+  // Seleccionados-para-comparar que tienen foto (los únicos llevables al
+  // Comparador). Alimentan la barra/leyenda "→ Comparar en tripletes".
+  const comparableSelected = selectedForCompare
+    .map((id) => persons.find((p) => p.id === id))
+    .filter((p): p is Person => !!p && !!p.photoSha256);
+
   // -------------------------------------
   // Render
   // -------------------------------------
@@ -748,6 +835,53 @@ export default function GenealogyTree() {
           onDragOverPerson={setDragOverPersonId}
           onCosineClick={(aId, bId, cos) => setTripletModalState({ aId, bId, cosine: cos })}
         />
+      )}
+
+      {/* Barra "→ Comparar en tripletes": leyenda de las caras seleccionadas
+          (mini-fotos) + botón que las lleva al Comparador MVP. Aparece cuando
+          hay 2-3 nodos con foto seleccionados (ctrl+click). La tripleta ya se
+          persiste sola vía el effect; el botón es navegación. */}
+      {comparableSelected.length >= 2 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          marginTop: 12, padding: 10, background: '#fff3e0',
+          border: '1px solid #f0c98a', borderRadius: 4,
+        }}>
+          <span style={{ fontSize: 12, color: '#9a6a00' }}>Comparar en tripletes:</span>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {comparableSelected.slice(0, 3).map((p) => {
+              const url = p.photoSha256 ? photoUrls.get(p.photoSha256) ?? null : null;
+              return (
+                <div key={p.id} style={{ textAlign: 'center', width: 56 }}>
+                  <div style={{
+                    width: 48, height: 48, margin: '0 auto', borderRadius: 4,
+                    overflow: 'hidden', border: '2px solid #d97706', background: '#fff',
+                  }}>
+                    {url && <img src={url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#444', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.name}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {comparableSelected.length > 3 && (
+            <span style={{ fontSize: 11, color: '#9a6a00' }}>
+              (se llevan las primeras 3 de {comparableSelected.length})
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={goToTriplets}
+            style={{
+              fontSize: 13, fontWeight: 600, padding: '8px 16px', cursor: 'pointer',
+              background: '#d97706', color: '#fff', border: 'none', borderRadius: 4,
+            }}
+          >
+            → Comparar en tripletes
+          </button>
+        </div>
       )}
 
       {/* Modal de tripleta: detalle del par seleccionado + agregar tercero +

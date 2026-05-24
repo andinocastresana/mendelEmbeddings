@@ -1,14 +1,20 @@
 // =========================================
 // ID: PHYLOFACE_CLIENT_001
-// VERSION: v1.3
+// VERSION: v1.4
 // =========================================
 // App principal del cliente. Router simple entre:
 //   - Comparator        (PHYLOFACE_COMPARATOR): MVP Track 2a — 3 slots (P1 · Hijo · P2)
 //   - GenealogyTree     (PHYLOFACE_GENEALOGY_TREE): MVP Track 2b — árbol genealógico (Tarea #26)
+//   - CalibrationTab    (PHYLOFACE_CALIBRATION_TAB): Tarea #6 Fase B — histogramas + métricas
 //   - Spike ONNX        (PHYLOFACE_SPIKE_001): paridad ONNX Runtime Web vs Python
 //   - Spike MediaPipe   (PHYLOFACE_SPIKE_002): paridad MediaPipe Tasks for Web vs Python
 //   - Spike Alignment   (PHYLOFACE_SPIKE_003): paridad alineación canónica JS vs Python
 //   - Spike Detection   (PHYLOFACE_SPIKE_004): pipeline e2e (detect → align → embed) JS vs Python
+//
+// Cambio v1.3 → v1.4 (Tarea #6 Fase B): solapa "Calibración" que lee el JSON
+// de calibración (servido en public/calibration/) y dibuja los histogramas
+// kin vs non-kin + las métricas por relación. El popup que ubica un cosine
+// concreto (CalibrationModal) se abre desde el Comparador y el árbol.
 //
 // Cambio v1.2 → v1.3 (Tarea #26 iter tripleta): App escucha
 // CustomEvent("phyloface-go-to-tab", { detail: Tab }) en window. Lo usa
@@ -28,14 +34,15 @@
 import { useEffect, useState } from 'react';
 import Comparator from './Comparator';
 import GenealogyTree from './GenealogyTree';
+import CalibrationTab from './CalibrationTab';
 import SpikeOnnx from './SpikeOnnx';
 import SpikeMediapipe from './SpikeMediapipe';
 import SpikeAlignment from './SpikeAlignment';
 import SpikeDetection from './SpikeDetection';
 
-type Tab = 'comparator' | 'genealogy' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
+type Tab = 'comparator' | 'genealogy' | 'calibration' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
 
-const VALID_TABS: Tab[] = ['comparator', 'genealogy', 'onnx', 'mediapipe', 'alignment', 'detection'];
+const VALID_TABS: Tab[] = ['comparator', 'genealogy', 'calibration', 'onnx', 'mediapipe', 'alignment', 'detection'];
 
 function App() {
   const [tab, setTab] = useState<Tab>('comparator');
@@ -83,6 +90,9 @@ function App() {
         <div style={tabStyle(tab === 'genealogy')} onClick={() => setTab('genealogy')}>
           Árbol genealógico
         </div>
+        <div style={tabStyle(tab === 'calibration')} onClick={() => setTab('calibration')}>
+          Calibración
+        </div>
         <div style={tabStyle(tab === 'onnx')} onClick={() => setTab('onnx')}>
           Spike ONNX (embedding)
         </div>
@@ -100,6 +110,7 @@ function App() {
       {/* Contenido */}
       {tab === 'comparator' && <Comparator />}
       {tab === 'genealogy' && <GenealogyTree />}
+      {tab === 'calibration' && <CalibrationTab />}
       {tab === 'onnx' && <SpikeOnnx />}
       {tab === 'mediapipe' && <SpikeMediapipe />}
       {tab === 'alignment' && <SpikeAlignment />}

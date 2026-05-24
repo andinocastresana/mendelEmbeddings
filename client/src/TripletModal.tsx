@@ -1,7 +1,13 @@
 // =========================================
 // ID: PHYLOFACE_TRIPLET_MODAL
-// VERSION: v1.0
+// VERSION: v1.1
 // =========================================
+// Cambio v1.0 → v1.1 (Tarea #6 Fase B): cada fila de cosine (`CosineRow`) es
+// clickeable y abre `CalibrationModal` (anidado, zIndex mayor) para ubicar ese
+// cosine sobre la distribución calibrada de KinFaceW-I. Relación inicial 'ALL'
+// (Person no guarda sexo → no se puede fijar Hijo vs Hija); el modal la deja
+// elegir.
+//
 // Modal flotante de detalle de comparación. Se abre al clickear el label del
 // cosine entre dos nodos en el SVG del árbol (`GenealogyTree.tsx`). Lo que
 // hace:
@@ -46,6 +52,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cosineSimilarity } from './lib/pipeline';
 import type { Person, PersonId, Sha256Hex } from './lib/genealogy';
+import { writeActiveTriplet, type TripletSlot } from './lib/activeTriplet';
+import CalibrationModal from './CalibrationModal';
 
 // Roles posibles en el modal. Incluye "Hijo/a" (slot central del Comparador
 // MVP) además de los de los slots laterales. Si el usuario marca dos como
@@ -160,6 +168,8 @@ export default function TripletModal({
   });
   const [isComputing, setIsComputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cosine seleccionado para ver su calibración (popup anidado). null = cerrado.
+  const [calValue, setCalValue] = useState<{ value: number; label: string } | null>(null);
 
   // Disparar cómputo de A↔C y B↔C cuando hay tercero. El reset al "sin
   // tercero" se hace en `removeThird()` (handler) para evitar set-state en
@@ -229,13 +239,13 @@ export default function TripletModal({
     ];
     if (third) entries.push({ person: third, role: cRole });
 
-    const assignedSlots = new Map<SlotKey, { sha256: string; role?: string }>();
+    const assignedSlots = new Map<SlotKey, { personId: PersonId; sha256: string; role?: string }>();
 
     // Primero asignar Hijo/a (slot 'child'): la primera entry con rol 'Hijo/a'.
     const childIdx = entries.findIndex((e) => e.role === 'Hijo/a');
     if (childIdx !== -1) {
       const c = entries[childIdx];
-      assignedSlots.set('child', { sha256: c.person.photoSha256! });
+      assignedSlots.set('child', { personId: c.person.id, sha256: c.person.photoSha256! });
       entries.splice(childIdx, 1);
     }
     // Sino, si hay exactamente 3 entries, falta marcar uno como Hijo/a;
@@ -244,28 +254,29 @@ export default function TripletModal({
     if (childIdx === -1 && entries.length === 3) {
       // mover el último al child
       const last = entries.pop()!;
-      assignedSlots.set('child', { sha256: last.person.photoSha256! });
+      assignedSlots.set('child', { personId: last.person.id, sha256: last.person.photoSha256! });
     }
     // Las restantes (1 o 2) van a left/right.
     const sideSlots: SlotKey[] = ['left', 'right'];
     for (let i = 0; i < entries.length && i < sideSlots.length; i++) {
       const e = entries[i];
       assignedSlots.set(sideSlots[i], {
+        personId: e.person.id,
         sha256: e.person.photoSha256!,
         role: e.role ?? undefined,
       });
     }
 
-    const payload = {
-      v: 1 as const,
-      ts: Date.now(),
-      slots: Array.from(assignedSlots, ([slot, info]) => ({
-        slot,
-        sha256: info.sha256,
-        ...(info.role ? { role: info.role } : {}),
-      })),
-    };
-    localStorage.setItem('phyloface-comparator-prefill', JSON.stringify(payload));
+    // Escribir la tripleta activa (persistente, compartida) en vez del prefill
+    // de un solo uso: el Comparador la levanta al montar y el vínculo queda
+    // vivo para el sync bidireccional. treeId = el de las personas del árbol.
+    const slots: TripletSlot[] = Array.from(assignedSlots, ([slot, info]) => ({
+      slot,
+      personId: info.personId,
+      sha256: info.sha256,
+      ...(info.role ? { role: info.role } : {}),
+    }));
+    writeActiveTriplet(a.treeId, slots);
     window.dispatchEvent(new CustomEvent('phyloface-go-to-tab', { detail: 'comparator' }));
     onClose();
   };
@@ -274,6 +285,7 @@ export default function TripletModal({
   // Render
   // -----------------------------------------
   return (
+    <>
     <div
       role="dialog"
       aria-modal="true"
@@ -359,10 +371,29 @@ export default function TripletModal({
             {isComputing && <span style={{ marginLeft: 8 }}>⏳ computando…</span>}
           </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 13 }}>
-            <CosineRow label={`${a.name} ↔ ${b.name}`} value={cosines.ab} />
-            {third && <CosineRow label={`${a.name} ↔ ${third.name}`} value={cosines.ac} />}
-            {third && <CosineRow label={`${b.name} ↔ ${third.name}`} value={cosines.bc} />}
+            <CosineRow
+              label={`${a.name} ↔ ${b.name}`}
+              value={cosines.ab}
+              onClick={(v) => setCalValue({ value: v, label: `${a.name} ↔ ${b.name}` })}
+            />
+            {third && (
+              <CosineRow
+                label={`${a.name} ↔ ${third.name}`}
+                value={cosines.ac}
+                onClick={(v) => setCalValue({ value: v, label: `${a.name} ↔ ${third.name}` })}
+              />
+            )}
+            {third && (
+              <CosineRow
+                label={`${b.name} ↔ ${third.name}`}
+                value={cosines.bc}
+                onClick={(v) => setCalValue({ value: v, label: `${b.name} ↔ ${third.name}` })}
+              />
+            )}
           </ul>
+          <div style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
+            clic en un cosine → calibración (probabilidad de parentesco)
+          </div>
         </div>
 
         {/* Selector del tercero o pista cuando ya está. */}
@@ -415,6 +446,17 @@ export default function TripletModal({
         </div>
       </div>
     </div>
+
+    {/* Popup de calibración anidado (zIndex mayor que el TripletModal). */}
+    {calValue && (
+      <CalibrationModal
+        value={calValue.value}
+        pairLabel={calValue.label}
+        defaultRelation="ALL"
+        onClose={() => setCalValue(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -475,16 +517,29 @@ function TripletSlot({ label, person, photoUrl, role, onRoleChange, onRemove }: 
 interface CosineRowProps {
   label: string;
   value: number | null;
+  /** Clic sobre el valor (sólo si ya está computado) → abre calibración. */
+  onClick?: (value: number) => void;
 }
 
-function CosineRow({ label, value }: CosineRowProps) {
+function CosineRow({ label, value, onClick }: CosineRowProps) {
+  const clickable = value !== null && !!onClick;
   return (
     <li style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       padding: '3px 0', borderBottom: '1px dashed #eee',
     }}>
       <span>{label}</span>
-      <span style={{ fontFamily: 'monospace', fontWeight: 700 }} data-testid="cosine-modal-value">
+      <span
+        onClick={clickable ? () => onClick!(value!) : undefined}
+        title={clickable ? 'Ver calibración de este parecido' : undefined}
+        style={{
+          fontFamily: 'monospace', fontWeight: 700,
+          cursor: clickable ? 'pointer' : 'default',
+          color: clickable ? '#1a73e8' : '#333',
+          textDecoration: clickable ? 'underline' : 'none',
+        }}
+        data-testid="cosine-modal-value"
+      >
         {value === null ? '…' : value.toFixed(4)}
       </span>
     </li>

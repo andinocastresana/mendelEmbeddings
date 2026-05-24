@@ -1,7 +1,29 @@
 // =========================================
 // ID: PHYLOFACE_COMPARATOR
-// VERSION: v2.3
+// VERSION: v2.5
 // =========================================
+// Cambio v2.4 → v2.5 (sync bidireccional persistente con el Árbol):
+// - El Comparador puede estar "vinculado" a un árbol vía la **tripleta activa**
+//   (`lib/activeTriplet.ts`, localStorage persistente que reemplaza al prefill
+//   de un solo uso). Al montar, si hay tripleta activa, precarga los slots
+//   desde las fotos del árbol y muestra un banner de vínculo.
+// - **Writeback aditivo**: en modo vinculado, cambiar la foto de un slot
+//   resuelve la foto contra los nodos del árbol; si ya es de un nodo lo
+//   re-vincula, si es nueva crea un nodo nuevo (nunca pisa fotos existentes) y
+//   reescribe la tripleta. El Árbol refleja esto al volver a montarse.
+// - `tripletRef` es la fuente de verdad de los slots vinculados que se
+//   persisten (evita problemas de timing de setState en los writebacks async).
+// - Botón "desvincular" (vuelve a modo anónimo y limpia la tripleta) y
+//   "← volver al árbol". En modo NO vinculado el comportamiento es el de antes
+//   (anónimo, sin persistencia).
+//
+// Cambio v2.3 → v2.4 (Tarea #6 Fase B — calibración clickeable):
+// - Cada `CosineCard` es clickeable: abre `CalibrationModal`, que ubica ese
+//   cosine sobre la distribución calibrada de KinFaceW-I (histograma +
+//   probabilidad de parentesco + métricas previas). Como el slot central es
+//   "Hijo/a" sin sexo conocido, la relación arranca en 'ALL'; el modal deja
+//   elegir la específica (FS/FD/MS/MD).
+//
 // Cambio v2.2 → v2.3 (Tarea #26 iter tripleta — handoff desde árbol):
 // - Al montar, el comparador inspecciona `localStorage["phyloface-comparator-prefill"]`.
 //   Si existe y es válido (versión 1, age < 60s, esquema correcto), lee los
@@ -59,7 +81,7 @@
 // - El cosine se muestra crudo, sin etiqueta semántica (no hay umbral
 //   calibrado todavía — Tarea #6 lo va a generar contra KinFaceW).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as ort from 'onnxruntime-web';
 import { FaceLandmarker } from '@mediapipe/tasks-vision';
 import {
@@ -70,39 +92,15 @@ import {
   loadImage,
   type PipelineOutput,
 } from './lib/pipeline';
-import { getPhoto } from './lib/treeStore';
-
-// Clave de localStorage para handoff desde el árbol (ver cabecera v2.3).
-const PREFILL_KEY = 'phyloface-comparator-prefill';
-const PREFILL_MAX_AGE_MS = 60_000;
-
-interface PrefillSlot {
-  slot: 'left' | 'child' | 'right';
-  sha256: string;
-  role?: string;  // sólo aplica a left/right
-}
-
-interface PrefillPayload {
-  v: 1;
-  ts: number;
-  slots: PrefillSlot[];
-}
-
-function readAndConsumePrefill(): PrefillPayload | null {
-  const raw = localStorage.getItem(PREFILL_KEY);
-  if (!raw) return null;
-  localStorage.removeItem(PREFILL_KEY);
-  try {
-    const parsed = JSON.parse(raw) as PrefillPayload;
-    if (parsed.v !== 1) return null;
-    if (typeof parsed.ts !== 'number') return null;
-    if (Date.now() - parsed.ts > PREFILL_MAX_AGE_MS) return null;
-    if (!Array.isArray(parsed.slots)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
+import { getPhoto, listPersons, putPerson, putPhoto } from './lib/treeStore';
+import { newPerson } from './lib/genealogy';
+import {
+  readActiveTriplet,
+  writeActiveTriplet,
+  clearActiveTriplet,
+  type TripletSlot,
+} from './lib/activeTriplet';
+import CalibrationModal from './CalibrationModal';
 
 // -----------------------------------------
 // Slots y roles
@@ -122,6 +120,8 @@ interface SlotState {
   result: PipelineOutput | null;   // embedding + kps + aligned + timings
   error: string | null;
   isDraggingOver: boolean;         // highlight visual durante drag-over
+  personId?: string;               // nodo del árbol vinculado (modo tripleta)
+  sha256?: string;                 // hash de la foto (modo tripleta)
 }
 
 const EMPTY_SLOT: SlotState = {
@@ -159,6 +159,19 @@ function Comparator() {
   // y el de "Hijo/a vs los dos adultos" (2 entries).
   const [cosines, setCosines] = useState<{ label: string; value: number }[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  // Cosine seleccionado para ver su calibración (popup). null = cerrado.
+  const [calModal, setCalModal] = useState<{ value: number; label: string } | null>(null);
+
+  // Árbol al que está vinculado el Comparador (modo tripleta). null = anónimo.
+  // Init lazy: lee la tripleta activa de localStorage al montar (sin setState
+  // en effect). El effect de montaje sólo carga las fotos (async).
+  const [linkedTreeId, setLinkedTreeId] = useState<string | null>(
+    () => readActiveTriplet()?.treeId ?? null,
+  );
+  // Fuente de verdad de los slots vinculados que se persisten en la tripleta
+  // activa. Es un ref (no estado) para que los writebacks async no dependan del
+  // timing de setSlots. Keyed por SlotKey.
+  const tripletRef = useRef<Map<SlotKey, TripletSlot>>(new Map());
 
   // Sesiones cacheadas entre corridas.
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
@@ -200,6 +213,74 @@ function Comparator() {
   };
 
   // ---------------------------------------
+  // Writeback al árbol (modo vinculado). Reescribe la tripleta activa desde
+  // `tripletRef` (la fuente de verdad de los slots vinculados).
+  // ---------------------------------------
+  const persistTriplet = useCallback(() => {
+    if (!linkedTreeId) return;
+    writeActiveTriplet(linkedTreeId, Array.from(tripletRef.current.values()));
+  }, [linkedTreeId]);
+
+  // Resuelve la foto contra el árbol (aditivo): si ya es de un nodo lo
+  // re-vincula; si es nueva crea un nodo nuevo (nunca pisa fotos existentes).
+  // Actualiza la linkage del slot y reescribe la tripleta.
+  const syncSlotToTree = useCallback(async (key: SlotKey, file: File) => {
+    if (!linkedTreeId) return;
+    try {
+      const rec = await putPhoto(file);
+      const persons = await listPersons(linkedTreeId);
+      let person = persons.find((p) => p.photoSha256 === rec.sha256);
+      if (!person) {
+        person = { ...newPerson(linkedTreeId, `Nuevo nodo ${persons.length + 1}`), photoSha256: rec.sha256 };
+        await putPerson(person);
+      }
+      updateSlot(key, { personId: person.id, sha256: rec.sha256 });
+      const role = key === 'left' ? leftRole : key === 'right' ? rightRole : undefined;
+      tripletRef.current.set(key, { slot: key, personId: person.id, sha256: rec.sha256, role });
+      persistTriplet();
+    } catch (e) {
+      setGlobalError(`Sincronizando con el árbol: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [linkedTreeId, leftRole, rightRole, persistTriplet]);
+
+  // Desvincula un slot de la tripleta (al quitarle la foto en modo vinculado).
+  // En useCallback para que el acceso al ref no se evalúe en render.
+  const unlinkSlot = useCallback((key: SlotKey) => {
+    tripletRef.current.delete(key);
+    persistTriplet();
+  }, [persistTriplet]);
+
+  // onPick efectivo de cada slot: actualiza el estado y, en modo vinculado,
+  // sincroniza con el árbol (crear/re-vincular nodo) o desvincula el slot si se
+  // quitó la foto.
+  const handleSlotFile = (key: SlotKey, file: File | null) => {
+    onPickFile(key, file);
+    if (!linkedTreeId) return;
+    if (file) void syncSlotToTree(key, file);
+    else unlinkSlot(key);
+  };
+
+  // Desvincular: vuelve a modo anónimo (limpia la tripleta persistida). Las
+  // fotos cargadas quedan en los slots, pero los cambios ya no tocan el árbol.
+  const handleUnlink = () => {
+    clearActiveTriplet();
+    tripletRef.current.clear();
+    setLinkedTreeId(null);
+  };
+
+  // Mantener el rol de los slots laterales en la tripleta persistida. Inline el
+  // write para no arrastrar `persistTriplet` a las deps (no hay setState acá).
+  useEffect(() => {
+    if (!linkedTreeId) return;
+    let changed = false;
+    const l = tripletRef.current.get('left');
+    if (l && l.role !== leftRole) { tripletRef.current.set('left', { ...l, role: leftRole }); changed = true; }
+    const r = tripletRef.current.get('right');
+    if (r && r.role !== rightRole) { tripletRef.current.set('right', { ...r, role: rightRole }); changed = true; }
+    if (changed) writeActiveTriplet(linkedTreeId, Array.from(tripletRef.current.values()));
+  }, [leftRole, rightRole, linkedTreeId]);
+
+  // ---------------------------------------
   // Drag-and-drop handlers (uno set por slot, instanciado en el render).
   // ---------------------------------------
   const onDragOver = (key: SlotKey) => (e: React.DragEvent<HTMLDivElement>) => {
@@ -221,7 +302,7 @@ function Comparator() {
       updateSlot(key, { error: `Tipo no soportado: ${file.type || 'desconocido'}` });
       return;
     }
-    onPickFile(key, file);
+    handleSlotFile(key, file);
   };
 
   // ---------------------------------------
@@ -278,28 +359,29 @@ function Comparator() {
   }, []);
 
   // ---------------------------------------
-  // Prefill desde handoff del árbol (cabecera v2.3). Sólo al montar; la key
-  // se consume y se borra. Si el blob de alguno de los slots no existe en
-  // IDB (poco probable porque el modal acababa de leerlo) se saltea ese slot.
+  // Carga desde la tripleta activa (cabecera v2.5). Sólo al montar. Si hay una
+  // tripleta persistida, entra en "modo vinculado": precarga los slots desde
+  // las fotos del árbol, fija `linkedTreeId` y siembra `tripletRef`. Si un blob
+  // no está en IDB se saltea ese slot. Sin tripleta → modo anónimo (como antes).
   // ---------------------------------------
   useEffect(() => {
-    const prefill = readAndConsumePrefill();
-    if (!prefill) return;
+    const triplet = readActiveTriplet();
+    if (!triplet) return;
     void (async () => {
       const nextSlots: Partial<Record<SlotKey, SlotState>> = {};
       let newLeftRole: Role | null = null;
       let newRightRole: Role | null = null;
-      for (const s of prefill.slots) {
+      for (const s of triplet.slots) {
         if (s.slot !== 'left' && s.slot !== 'child' && s.slot !== 'right') continue;
         try {
           const rec = await getPhoto(s.sha256);
           if (!rec) {
-            console.warn(`[Comparator] prefill: photo ${s.sha256.slice(0, 8)}… no está en IDB`);
+            console.warn(`[Comparator] tripleta: foto ${s.sha256.slice(0, 8)}… no está en IDB`);
             continue;
           }
           const file = new File(
             [rec.blob],
-            `prefill-${s.sha256.slice(0, 8)}.jpg`,
+            `tree-${s.sha256.slice(0, 8)}.jpg`,
             { type: rec.blob.type || 'image/jpeg' },
           );
           nextSlots[s.slot] = {
@@ -308,7 +390,10 @@ function Comparator() {
             result: null,
             error: null,
             isDraggingOver: false,
+            personId: s.personId,
+            sha256: s.sha256,
           };
+          tripletRef.current.set(s.slot, s);
           if (s.slot !== 'child' && s.role) {
             const r = s.role as Role;
             if ((ROLE_OPTIONS as readonly string[]).includes(r)) {
@@ -317,7 +402,7 @@ function Comparator() {
             }
           }
         } catch (e) {
-          console.warn(`[Comparator] prefill failed for slot ${s.slot}:`, e);
+          console.warn(`[Comparator] carga de tripleta falló para slot ${s.slot}:`, e);
         }
       }
       setSlots((prev) => ({
@@ -446,6 +531,35 @@ function Comparator() {
         imágenes a los slots o usar el botón.
       </p>
 
+      {/* Banner de vínculo con el árbol (modo tripleta). Cambiar una foto acá
+          crea/re-vincula nodos en el árbol (aditivo). */}
+      {linkedTreeId && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: '#fff3e0', border: '1px solid #f0c98a', borderRadius: 4,
+          padding: '8px 12px', marginBottom: 12, fontSize: 13,
+        }}>
+          <span style={{ color: '#9a6a00' }}>
+            🔗 Vinculado al árbol genealógico — cambiar una foto crea o re-vincula
+            un nodo (nunca pisa fotos existentes).
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('phyloface-go-to-tab', { detail: 'genealogy' }))}
+            style={{ fontFamily: 'monospace', fontSize: 12, padding: '4px 10px', cursor: 'pointer' }}
+          >
+            ← volver al árbol
+          </button>
+          <button
+            onClick={handleUnlink}
+            title="Volver a modo anónimo (los cambios dejan de tocar el árbol)"
+            style={{ fontFamily: 'monospace', fontSize: 12, padding: '4px 10px', cursor: 'pointer' }}
+          >
+            desvincular
+          </button>
+        </div>
+      )}
+
       {/* Tres slots en fila (P1 - Niño - P2). Wrapean en pantallas chicas. */}
       <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap' }}>
         <SlotPicker
@@ -453,7 +567,7 @@ function Comparator() {
           label={leftLabel}
           slot={slots.left}
           canvasRefSet={(el) => { alignedCanvasRefs.current.left = el; }}
-          onPick={(f) => onPickFile('left', f)}
+          onPick={(f) => handleSlotFile('left', f)}
           onDragOver={onDragOver('left')}
           onDragLeave={onDragLeave('left')}
           onDrop={onDrop('left')}
@@ -471,7 +585,7 @@ function Comparator() {
           label={childLabel}
           slot={slots.child}
           canvasRefSet={(el) => { alignedCanvasRefs.current.child = el; }}
-          onPick={(f) => onPickFile('child', f)}
+          onPick={(f) => handleSlotFile('child', f)}
           onDragOver={onDragOver('child')}
           onDragLeave={onDragLeave('child')}
           onDrop={onDrop('child')}
@@ -481,7 +595,7 @@ function Comparator() {
           label={rightLabel}
           slot={slots.right}
           canvasRefSet={(el) => { alignedCanvasRefs.current.right = el; }}
-          onPick={(f) => onPickFile('right', f)}
+          onPick={(f) => handleSlotFile('right', f)}
           onDragOver={onDragOver('right')}
           onDragLeave={onDragLeave('right')}
           onDrop={onDrop('right')}
@@ -535,14 +649,19 @@ function Comparator() {
         <>
           <div style={{ display: 'flex', gap: 16, marginTop: 24, flexWrap: 'wrap' }}>
             {cosines.map((c) => (
-              <CosineCard key={c.label} label={c.label} value={c.value} />
+              <CosineCard
+                key={c.label}
+                label={c.label}
+                value={c.value}
+                onClick={() => setCalModal({ value: c.value, label: c.label })}
+              />
             ))}
           </div>
           <p style={{ fontSize: 11, color: '#888', marginTop: 12 }}>
-            Rango teórico: [-1, 1]. Valores cercanos a 1 indican embeddings
-            más similares. <em>No hay umbral calibrado todavía</em> (Tarea #6
-            lo va a generar contra KinFaceW); estos son los valores crudos de
-            similitud entre vectores 512-d.
+            Rango teórico: [-1, 1]. Valores cercanos a 1 indican embeddings más
+            similares. <strong>Clickeá una tarjeta</strong> para ubicar ese
+            cosine sobre la distribución calibrada de KinFaceW-I (Tarea #6):
+            probabilidad de parentesco + percentiles + veredicto vs umbral.
           </p>
         </>
       )}
@@ -580,6 +699,17 @@ function Comparator() {
           </table>
         </details>
       )}
+
+      {/* Popup de calibración: ubica el cosine clickeado sobre la distribución
+          calibrada. Relación inicial 'ALL' (no se conoce el sexo del hijo/a). */}
+      {calModal && (
+        <CalibrationModal
+          value={calModal.value}
+          pairLabel={calModal.label}
+          defaultRelation="ALL"
+          onClose={() => setCalModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -587,17 +717,27 @@ function Comparator() {
 // -----------------------------------------
 // Sub-componente: card de resultado de un cosine.
 // -----------------------------------------
-function CosineCard({ label, value }: { label: string; value: number }) {
+function CosineCard({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   return (
-    <div style={{
-      flex: 1, minWidth: 240,
-      padding: 16, background: '#f4f8ff',
-      border: '1px solid #b8d4ff', borderRadius: 4,
-    }}>
+    <div
+      onClick={onClick}
+      title={onClick ? 'Ver calibración de este parecido' : undefined}
+      style={{
+        flex: 1, minWidth: 240,
+        padding: 16, background: '#f4f8ff',
+        border: '1px solid #b8d4ff', borderRadius: 4,
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
       <div style={{ fontSize: 13, color: '#555', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 32, fontWeight: 700, color: '#1a73e8' }}>
         {value.toFixed(4)}
       </div>
+      {onClick && (
+        <div style={{ fontSize: 11, color: '#1a73e8', marginTop: 6 }}>
+          clic → calibración ↗
+        </div>
+      )}
     </div>
   );
 }
