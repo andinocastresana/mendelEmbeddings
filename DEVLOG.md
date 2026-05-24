@@ -9,6 +9,63 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-24
+
+### `8ac1957` · Tarea #6 Fase B (viz calibración) + sync persistente Árbol⇄Comparador `T6` `T28↑` `T28✓`
+
+**Dos features de UI del Track 2b en una sesión.** Pedido del usuario: la
+visualización de calibración (histogramas como popup) con una métrica nueva
+basada en las distribuciones que muestre también las anteriores; y mayor
+sincronía Árbol ⇄ Comparador ("tripletes").
+
+**Tarea #6 Fase B — visualización de la calibración.**
+- Solapa nueva "Calibración" (`CalibrationTab.tsx`): histogramas kin vs non-kin
+  por relación (FS/MD/FD/MS/ALL) + tabla (n, accuracy 5-CV, umbral Youden, AUC),
+  toggle cosine/euclidean. Gráfico SVG reutilizable `CalibrationChart.tsx`.
+- Popup `CalibrationModal.tsx` que ubica un cosine concreto sobre la distribución
+  calibrada — se abre clickeando el cosine en el Comparador (`CosineCard`) y en
+  el árbol (`CosineRow` del `TripletModal`, modal anidado).
+- **Métrica nueva = probabilidad calibrada de parentesco P(kin|cos).** La primera
+  implementación (density-ratio con piso de conteo) caía en las colas: cosine 0.7
+  daba MENOS probabilidad que 0.45 — el smoke lo detectó. Reemplazada por
+  **regresión isotónica (pool-adjacent-violators)** sobre la posterior por bin
+  (suavizado gaussiano + PAV): monótona por construcción, robusta en colas. LR
+  derivado consistente `p/(1-p)`; percentiles por CDF empírica. **Las métricas
+  previas (cosine crudo, veredicto vs umbral, accuracy, AUC) se muestran junto a
+  la nueva** para ver cómo varían entre ajustes (pedido explícito).
+- `lib/calibration.ts`: loader (fetch cacheado) + `scoreValue`. El JSON se sirve
+  desde `client/public/calibration/` (no bundle) → re-calibrar = re-copiar el
+  archivo, sin rebuild. `inferRelation` devuelve 'ALL' salvo que se conozcan ambos
+  sexos (Person no guarda sexo → hoy siempre 'ALL'; el modal deja elegir).
+- App v1.4 (tab nueva), Comparator v2.4, TripletModal v1.1.
+
+**Sync bidireccional persistente Árbol ⇄ Comparador.**
+- `lib/activeTriplet.ts`: "tripleta activa" persistente en localStorage,
+  compartida por ambas vistas. Reemplaza el handoff de un solo uso (TTL 60s del
+  paso 5 de #26) por un vínculo vivo. `assignTripletSlots` mapea nodos→slots
+  infiriendo el hijo del pedigree (roles Padre/Madre reales).
+- Árbol→Comparador: seleccionar 2-3 nodos con foto (ctrl+click) escribe la
+  tripleta sola; barra abajo con leyenda de mini-caras + botón "→ Comparar en
+  tripletes". GenealogyTree v3.2.
+- Comparador→Árbol **aditivo**: cambiar la foto de un slot vinculado re-vincula
+  el nodo si la foto ya es de uno, o crea un nodo nuevo si no (NUNCA pisa fotos
+  existentes — confirmado con el usuario); reescribe la tripleta. El árbol
+  re-hidrata la selección al volver (los nodos nuevos aparecen vía reloadPersons).
+  Banner de vínculo + "desvincular" + "← volver al árbol". Comparator v2.5; el
+  handoff del TripletModal ahora escribe la tripleta.
+
+**Decisiones (confirmadas con el usuario):** reusar el Comparador MVP como
+"tripletes" (no vista nueva); writeback aditivo (nunca destructivo).
+
+**Verificación:** tsc + `npm run build` OK; eslint sin errores nuevos (los 6 que
+quedan son preexistentes: `reloadPersons` set-state-in-effect + 5 `any` en
+spikes). Dos smokes Playwright headless (loop visual cerrado con screenshots):
+(1) calibración — tab cosine/euclidean + `scoreValue` monótona verificada en el
+módulo real vía Vite + modal sobre el pipeline real; (2) sync — seleccionar 3 →
+barra → comparador vinculado → cambiar foto central crea "Nuevo nodo 4" (original
+intacto, selección re-apuntada) → volver muestra 4 nodos. Térmico: pico 89°C
+atribuible al pipeline GPU del comparador, no a estas features (JS puro).
+
 ## 2026-05-23
 
 ### `cc4a029` · Tarea #6 Fase A — calibración de umbrales de parentesco sobre KinFaceW-I `T6`
