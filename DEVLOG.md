@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
-### `TBD` · [codex] Tareas #2/#3 — contrato canónico de regiones y deuda regions v1 `T2✓` `T3✓`
+### `8edd1dd` · [codex] Tareas #2/#3 — contrato canónico de regiones y deuda regions v1 `T2✓` `T3✓`
 
 **Cierre de las tareas base del bloque regional M1.4.** Se formaliza la lista de
 regiones como contrato del motor y se documenta la deuda histórica de `regions v1`
