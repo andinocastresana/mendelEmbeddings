@@ -11,6 +11,53 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `5c47367` · [claude] Panel de scores por región en el Comparador web + fix concurrencia ONNX `T30↑` `T30✓` `T9` `T10` `T16` `T4`
+
+Retomé la feature de scores por región (a medio construir en una sesión cortada por
+límite de créditos: geométrico ya validado, occlusion no). Cierra como Tarea #30.
+
+- **Arquitectura desacoplada**: `client/src/lib/regionalScores.ts` (contrato
+  `RegionalScorer` + registry) y `regionalScorers.ts` (impls `geometric` y
+  `occlusion`), intercambiables vía selector en la UI — mismo patrón adapter que el
+  detector de caras. `lib/regions.ts` = espejo JS del contrato canónico
+  `regions-v2.0` del motor (índices Face Mesh transcritos de `regions/geometry.py`).
+- **`lib/pipeline.ts` v1.2→v1.4**: expone `meshLandmarksImage` (478×2),
+  `landmarksAligned` (478×2 en el espacio alineado 112×112 vía M) y `M` (afín 2×3);
+  los consumen los scorers. Aditivo (callers viejos los ignoran).
+- **UI** (`RegionalScoresPanel.tsx`): Hijo/a al centro + un progenitor por lado,
+  barras apuntando al Hijo/a, **radar de 8 ejes** y **heatmap** opcional sobre el
+  Hijo/a. Escala **Reparto P↔M** (por región, share = score/(scoreP+scoreM), suma
+  100 entre padre y madre) vs **Absoluta** (score crudo). **Pares colapsados**
+  (cejas/ojos/pómulos/mejillas → 8 filas) con **línea de rango** L/R dentro de la
+  barra. **Barra de promedio** por lado. Orden anatómico arriba→abajo
+  (frente·cejas·ojos·nariz·pómulos·mejillas·boca·mentón).
+- **Persistencia**: cache por método en memoria (cambiar de método no recomputa) +
+  **persistencia IDB** en **modo tripleta** extendiendo `Comparison.regional`
+  (`genealogy.ts` v1.1→v1.2, import type-only; `treeStore.getComparisonForPair`;
+  prop `link` en el panel que rehidrata al montar y hace upsert al calcular). Modo
+  anónimo = solo memoria.
+- **Fix de concurrencia ONNX** (lo que habilita occlusion): la sesión es compartida
+  entre el pipeline y el occlusionScorer (~12 inferencias/progenitor); ORT-web NO
+  admite `session.run()` concurrentes. El panel monta con `child + 1 progenitor`
+  mientras `onCompare` aún procesa el 3er slot → en WASM (headless) los dos `run()`
+  se pisan (`Kd of null` + `[Comparator] slot right falló` co-ocurrentes = la firma),
+  en WebGPU (headed) no. Fix: `runSessionExclusive` (cola de promesas en
+  `pipeline.ts`) serializa todo run; guard `busy` (Comparador→panel) deshabilita
+  "Calcular" durante el compare inicial. **Occlusion solo se valida headed**
+  (headless cae a WASM y bloquea el main thread).
+- **Alcance vs #9/#10/#16**: cubre el **lado cliente** de #9 (heatmap por regiones,
+  coloreo por contribución) y #16 (radar de scores regionales), consume #4
+  (features geométricas) espejada a JS. La occlusion es **a nivel región** (1
+  inferencia por región) — variante más gruesa que la **ventana densa 12×12/16×16**
+  que pide #10, que queda abierta. #9/#16 quedan en backlog a la espera de tu
+  confirmación para cerrarlas.
+- **Verificación**: `tsc -b` + `vite build` limpios tras cada cambio (sin ciclos de
+  import); smoke `client/scripts/regional-scores-smoke.mjs` (modo `HEADED=1` agregado)
+  — headless valida layout (8 filas, radar, toggle de escala) y de paso la capa-2;
+  headed validó occlusion (24 inferencias sin `Kd of null`). Recursos vía
+  `dev-monitored.sh`: baseline ~42°C, pico 88°C breve durante el burst GPU, vuelta a
+  45°C. Loop visual cerrado con screenshots.
+
 ### `25770ee` (merge `1a26878`) · [claude] README inicial del proyecto (Tarea #21) `T21✓` `T23✓`
 
 Escrito en paralelo al bloque regional de Codex, aislado en un git worktree

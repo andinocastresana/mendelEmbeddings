@@ -50,6 +50,49 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-25 · [claude] · Panel de scores por región (#30) + fix concurrencia ONNX — commiteado+pusheado
+
+- **Rama / commits**: `main`. `5c47367` (feature, 9 archivos de código) + el commit de
+  docs de esta misma tanda (DEVLOG/TAREAS/este handoff). Pusheados a `origin/main`.
+- **Hice**: retomé la feature de scores por región (sesión previa cortada por límite
+  de créditos; geométrico validado, occlusion no). Cierra como **#30**. Scorer
+  desacoplado (geométrico/occlusion como adapter+registry), `lib/regions.ts` espejo
+  JS de `regions-v2.0`, `pipeline.ts` v1.4 (expone landmarks 478 + afín M). UI:
+  reparto P↔M (suma 100), pares colapsados con rango L/R, barra de promedio, radar,
+  heatmap, orden anatómico. Persistencia IDB extendiendo `Comparison.regional`
+  (genealogy v1.2 + `getComparisonForPair`). **Fix de concurrencia**:
+  `runSessionExclusive` serializa `session.run()` (ORT-web no admite runs
+  concurrentes) + guard `busy`.
+- **Abierto / handoff**: (1) **#10 sigue abierta** — implementé occlusion **a nivel
+  región**, NO la ventana densa 12×12/16×16 que pide #10. (2) **#9/#16** quedaron en
+  backlog aunque su lado cliente (heatmap/radar) ya está hecho — esperan OK del
+  usuario para cerrarlas. (3) Ofrecí un smoke headless del **flujo vinculado** para
+  cubrir la persistencia IDB (hoy validada por build+razonamiento, no por test).
+- **Ojo con**: **occlusion necesita browser HEADED** — en headless ORT cae a WASM y
+  las ~24 inferencias bloquean el main thread; el smoke saltea occlusion salvo
+  `HEADED=1`. La sesión ONNX es compartida: cualquier `run()` nuevo debe pasar por
+  `runSessionExclusive` para no reabrir la carrera.
+
+---
+
+## 2026-05-25 · [claude] · README/#21 mergeado + push de todo a origin + worktree limpio
+
+- **Rama / commits**: `main`. Mergeé `worktree-readme` (`1a26878`, README `25770ee`)
+  + commit de cierre `0b23bae` (DEVLOG/TAREAS/gitignore). Pusheé `ab4f011..0b23bae`
+  (12 commits: mi README + tu bloque regional #2/#3/#4/#7/#5/#29).
+- **Hice**: cerré la Tarea #21 (README real, antes vacío). De paso quedaron #23
+  (notebooks/jupytext) cerrada y #24 parcial (submodelos nombrados). Gitignoreé
+  `.claude/worktrees/` y **eliminé el worktree `worktree-readme`** (ya mergeado).
+  `origin/main` quedó en `0b23bae`.
+- **Abierto / handoff**: working tree principal limpio y sincronizado con origin.
+  Backlog de fondo activo: #8, #9, #10, #11, #12, etc. (Para #11, tu #5 dejó dicho
+  que no se parta de embeddings ArcFace regionales crudos.)
+- **Ojo con**: el experimento de worktree paralelo cerró bien — para próximos
+  trabajos simultáneos, mismo patrón (worktree por agente + merge cuando el tree
+  principal está limpio + el que mergea pushea con OK del usuario).
+
+---
+
 ## 2026-05-25 · [codex] · #2/#3 regiones canónicas cerradas
 
 - **Rama / commits**: `main`, commit pendiente al escribir esta entrada.
