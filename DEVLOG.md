@@ -33,9 +33,11 @@ para no volver a depender de definiciones implícitas del notebook.
   `regions v1` no era una API estable sino el período experimental previo a
   `regions_v2`: nombres/listas repetidas localmente, sin versión de contrato ni
   semántica de cache, y con métricas regionales visuales todavía no equivalentes
-  a embeddings regionales reales. También deja constancia de que los episodios KG
-  externos mencionados en `_meta/MIGRACION_TAREA1.md` no estaban disponibles en
-  las rutas locales de esta sesión; se rescataron las fuentes versionadas.
+  a embeddings regionales reales. Tras leer el protocolo del KG, se corrigió el
+  rescate: los episodios relevantes viven en `IA/memories/_meta/episodes/` con
+  `project: mendelEmbeddings`; se incorporaron las lecciones de verificar el
+  estado real del código antes de proponer pendientes, no asumir equivalencia
+  entre implementaciones homónimas y validar visualmente convenciones Face Mesh.
 - **Smoke test**: `tests/smoke/test_regions_canonical.py` valida versión, 12
   nombres, índices dentro del rango MediaPipe Face Mesh 0..477, estrategias
   válidas y simetrías izquierda/derecha.

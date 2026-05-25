@@ -58,10 +58,13 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
   re-export desde `phyloface.regions`, documentación de deuda histórica en
   `_meta/REGIONS_V1_DEBT.md`, smoke `tests/smoke/test_regions_canonical.py`, y
   `TAREAS_PENDIENTES.md` moviendo #2/#3 a completadas.
-- **Episodios**: busqué los episodios KG mencionados en
-  `_meta/MIGRACION_TAREA1.md` (`IA/memories/_meta/episodes/2026-05-20-*`) pero no
-  aparecieron en las rutas locales disponibles. Rescaté lo versionado: bitácora de
-  migración, cabeceras de módulos regionales y archivo experimental archivado.
+- **Episodios**: corregido tras leer
+  `IA/memories/_meta/protocol.md`: los episodios viven en
+  `IA/memories/_meta/episodes/` con `project: mendelEmbeddings`, no en el slot
+  `IA/memories/mendelEmbeddings/`. Se rescataron los episodios de verificación de
+  estado real previo a proponer pendientes, equivalencia entre implementaciones y
+  verificación visual de convenciones Face Mesh. No se creó episodio nuevo porque
+  el protocolo requiere validación explícita del usuario.
 - **Verifiqué**: `py_compile` OK y smoke canónico OK con Python del env
   `face-sim`.
 - **Abierto / handoff**: siguiente tramo recomendado = #4 features geométricas

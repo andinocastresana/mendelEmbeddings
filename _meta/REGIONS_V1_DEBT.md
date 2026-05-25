@@ -56,14 +56,22 @@ registry sin romper compatibilidad.
 
 ## Episodios rescatados
 
-La nota de migracion (`_meta/MIGRACION_TAREA1.md`) menciona dos episodios en el
-KG externo (`IA/memories/_meta/episodes/2026-05-20-*`). No los encontre en las
-rutas locales disponibles durante esta sesion. Se rescata lo versionado:
+El protocolo del KG (`IA/memories/_meta/protocol.md`) aclara que los episodios
+del proyecto no viven en `IA/memories/mendelEmbeddings/`, sino en
+`IA/memories/_meta/episodes/` con frontmatter `project: mendelEmbeddings`. Se
+leyeron e incorporaron los episodios relevantes:
 
-- la bitacora de migracion de Tarea #1;
-- los comentarios de cabecera de `geometry.py`, `extract_rect.py` y
-  `extract_masked.py`;
-- el archivo archivado `_toReview/phyloface_experimental_functions_20260520_110102.py`.
+- `2026-05-19-verify-real-code-state-before-proposing-pendings_diego-lenovo-debian.md`:
+  el codigo experimental ya tenia MediaPipe Face Mesh, regiones v2, regiones
+  enmascaradas, comparacion regional y overlays. Esto confirma que la tarea era
+  migrar/formalizar comportamiento existente, no implementar regiones desde cero.
+- `2026-05-20-migrating-between-impls-verify-equivalence_diego-lenovo-debian.md`:
+  en migraciones entre implementaciones homonimas no hay que asumir equivalencia;
+  el nuevo registry debe ser contrato explicito y verificable.
+- `2026-05-21-verify-convention-visually-before-numerical-agreement_diego-lenovo-debian.md`:
+  las convenciones de MediaPipe Face Mesh deben verificarse visualmente antes de
+  confiar en agreement numerico; futuras modificaciones regionales deberian pasar
+  por overlays o inspeccion equivalente.
 
-Si aparecen los episodios externos, se deben contrastar contra este documento y
-agregar solo decisiones no duplicadas.
+No se escribio un episodio nuevo: el protocolo indica que la captura de episodios
+requiere validacion explicita del usuario.
