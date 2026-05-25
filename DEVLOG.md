@@ -9,6 +9,41 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-25
+
+### `6a68553` · [claude] Infra de coordinación cross-agente (canal + inbox sincrónico) + entorno reproducible
+
+**Infra de proceso, sin tarea asociada.** A pedido del usuario: aislar los hilos
+de trabajo de cada agente (Claude / Codex / futuros) y montar un canal de
+comunicación, primero asincrónico y después sincrónico.
+
+- **Tres capas separadas**: verdad compartida del proyecto (código, DEVLOG,
+  TAREAS — agnóstica de agente) · scratch privado por agente
+  (`_meta/agents/<agente>/`, gitignored; las notas sueltas de Codex en
+  `_codexTests/` se movieron a `_meta/agents/codex/`) · canal cross-agente.
+- **Canal durable**: `AGENTS_HANDOFF.md` (raíz, versionado) — log asincrónico,
+  leer al iniciar / escribir al cerrar. `AGENTS.md` (raíz): instrucciones para
+  todos los agentes (Codex lo lee por convención) + sección "Entorno de
+  desarrollo" + protocolo del inbox + tag `[claude]`/`[codex]` en DEVLOG.
+- **Capa sincrónica (inbox)**: `_meta/agents/inbox/<destinatario>/` (gitignored),
+  un `.md` por mensaje; consumir = mover a `read/` (no borrar).
+  `scripts/agent-inbox-watch.sh` v1.1 — watcher polling que, corrido en background,
+  hace que la harness de Claude Code re-invoque al agente al llegar un mensaje;
+  modo `CHECK_ONCE=1` no bloqueante para el chequeo de inbox al iniciar sesión.
+- **Entorno reproducible**: `.nvmrc` (Node 20, requerido por Vite ≥20.19) +
+  documentación de activación (nvm + conda `face-sim`) en `AGENTS.md`. El entorno
+  es por-shell, no se hereda entre sesiones de agentes.
+- `CLAUDE.md` / `.gitignore`: lectura del canal + inbox check al iniciar; ignore de
+  `_meta/agents/`.
+
+**Validado en vivo**: round-trip Claude↔Codex por el inbox (mi watcher en
+background se disparó y la harness me re-invocó sola, sin prompt del usuario, 3
+veces). **Hallazgo**: Claude puede auto-despertarse (background → re-invocación),
+Codex no (sin re-invocación autónoma ni hook de startup configurable) → sincronía
+direccional, y el mecanismo de auto-chequeo al iniciar es la instrucción en el
+archivo de instrucciones (`AGENTS.md` / `CLAUDE.md`), no un hook. Detalle del
+intercambio en `AGENTS_HANDOFF.md`. Los inbox quedan fuera de git (efímeros).
+
 ## 2026-05-24
 
 ### `8ac1957` · Tarea #6 Fase B (viz calibración) + sync persistente Árbol⇄Comparador `T6` `T28↑` `T28✓`
