@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
-### `pendiente` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5` `T7✓`
+### `271da30` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5` `T7✓`
 
 Se abre el bloque regional posterior al contrato canónico de #2/#3. La decisión
 fue separar API pura y cache antes de usar embeddings regionales como señal de
