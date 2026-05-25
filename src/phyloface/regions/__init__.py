@@ -78,6 +78,19 @@ from phyloface.regions.extract_masked import (
     extract_regions_v2_masked,
     add_regions_v2_masked_to_pair,
 )
+from phyloface.regions.geometric_features import (
+    RegionGeometry,
+    region_geometry,
+    face_geometric_features,
+    pair_geometric_differences,
+)
+from phyloface.regions.regional_embeddings import (
+    REGIONAL_EMBEDDINGS_VERSION,
+    extract_region_embeddings,
+    compare_region_embeddings,
+    region_embeddings_to_arrays,
+    region_mask_fill_ratio,
+)
 
 __all__ = [
     # canonical registry
@@ -98,6 +111,17 @@ __all__ = [
     "crop_mask_and_image",
     "extract_regions_v2_masked",
     "add_regions_v2_masked_to_pair",
+    # geometric features
+    "RegionGeometry",
+    "region_geometry",
+    "face_geometric_features",
+    "pair_geometric_differences",
+    # regional embeddings
+    "REGIONAL_EMBEDDINGS_VERSION",
+    "extract_region_embeddings",
+    "compare_region_embeddings",
+    "region_embeddings_to_arrays",
+    "region_mask_fill_ratio",
     # geometry helpers
     "connection_set_to_index_list",
     "get_region_bbox",

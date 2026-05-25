@@ -1,0 +1,45 @@
+[test-monitored] muestreo cada 3s → _meta/TAREA5_region_embeddings_sanity_resources.log · comando: /home/diego/miniconda3/envs/face-sim/bin/python scripts/validate_region_embeddings_kinfacew.py --dataset KinFaceW-I --limit 12 --cool-threshold 88 --out /tmp/KinFaceW-I_region_embeddings_sanity_limit12.json
+/home/diego/miniconda3/envs/face-sim/lib/python3.11/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error [Errno -2] Name or service not known>
+  data = fetch_version_info()
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+W0000 00:00:1779712696.174767      61 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1779712696.187111      61 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1779712696.189866      63 landmark_projection_calculator.cc:186] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
+[test-monitored] WARN temp core_max 89°C sostenido
+Regional embeddings sanity #5 — dataset=KinFaceW-I limit=12 version=regions-v2.0+arcface-crop-v0.1
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+[FS] 12 pares
+  FS 10/12 temp=90C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+[test-monitored] WARN temp core_max 90°C sostenido
+[MD] 12 pares
+  MD 10/12 temp=93C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+[test-monitored] WARN temp core_max 96°C sostenido
+[FD] 12 pares
+  FD 10/12 temp=93C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+[test-monitored] WARN temp core_max 89°C sostenido
+[MS] 12 pares
+  MS 10/12 temp=93C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+
+region              n_pos  n_neg      acc      auc
+------------------------------------------------------
+left_eyebrow           22     22    0.433    0.510
+right_eyebrow          22     22    0.615    0.632
+left_eye               22     22    0.492    0.500
+right_eye              22     22    0.492    0.500
+left_cheekbone         22     22    0.538    0.583
+right_cheekbone        22     22    0.683    0.674
+left_cheek             22     22    0.467    0.467
+right_cheek            22     22    0.573    0.612
+nose                   22     22    0.633    0.632
+mouth                  22     22    0.412    0.529
+chin                   22     22    0.523    0.603
+forehead               22     21    0.520    0.649
+
+Fallos de imagen: 4
+Artefacto escrito: /tmp/KinFaceW-I_region_embeddings_sanity_limit12.json
+[test-monitored] resumen recursos: muestras=25  cpu_avg=40% cpu_max=62%  temp_avg=80°C temp_max=96°C (exit=0)

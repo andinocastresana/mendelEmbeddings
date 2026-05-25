@@ -17,11 +17,14 @@ def make_config_dict(
     face_size: tuple[int, int],
     ctx_id: int,
     max_faces: int,
+    regions_version: str | None = None,
+    region_extraction_mode: str | None = None,
+    region_embedding_model: str | None = None,
 ) -> dict:
     """
     Diccionario de configuración del pipeline.
     """
-    return {
+    config = {
         "library_name": library_name,
         "model_name": model_name,
         "det_size": list(det_size),
@@ -30,6 +33,13 @@ def make_config_dict(
         "max_faces": int(max_faces),
         "cache_schema_version": CACHE_SCHEMA_VERSION,
     }
+    if regions_version is not None:
+        config["regions_version"] = str(regions_version)
+    if region_extraction_mode is not None:
+        config["region_extraction_mode"] = str(region_extraction_mode)
+    if region_embedding_model is not None:
+        config["region_embedding_model"] = str(region_embedding_model)
+    return config
 
 
 def make_config_id(config_dict: dict) -> str:
@@ -46,8 +56,21 @@ def make_config_id(config_dict: dict) -> str:
         f"__face{face_w}x{face_h}"
         f"__max{config_dict['max_faces']}"
         f"__ctx{config_dict['ctx_id']}"
+        f"{_region_config_suffix(config_dict)}"
         f"__{short_hash}"
     )
+
+
+def _region_config_suffix(config_dict: dict) -> str:
+    regions_version = config_dict.get("regions_version")
+    if not regions_version:
+        return ""
+    mode = config_dict.get("region_extraction_mode", "regions")
+    model = config_dict.get("region_embedding_model")
+    suffix = f"__{regions_version}__{mode}"
+    if model:
+        suffix += f"__{model}"
+    return suffix
 
 
 def get_cache_dir(
@@ -82,6 +105,28 @@ def save_image_cache(payload: dict, config_dict: dict) -> tuple[Path, Path]:
     meta_path = cache_dir / "meta.json"
     data_path = cache_dir / "data.npz"
 
+    arrays = {
+        "indices": list(payload["indices"].shape),
+        "bboxes": list(payload["bboxes"].shape),
+        "det_scores": list(payload["det_scores"].shape),
+        "embeddings": list(payload["embeddings"].shape),
+        "crops": list(payload["crops"].shape),
+        "kps": list(payload["kps"].shape),
+        "landmark_3d_68": list(payload["landmark_3d_68"].shape),
+        "gender": list(payload["gender"].shape),
+        "age": list(payload["age"].shape),
+    }
+    optional_region_arrays = [
+        "region_names",
+        "region_embeddings",
+        "region_bboxes",
+        "region_mask_fill",
+        "region_valid",
+    ]
+    for key in optional_region_arrays:
+        if key in payload and payload[key] is not None:
+            arrays[key] = list(np.asarray(payload[key]).shape)
+
     meta = {
         "cache_created_at_utc": datetime.now(timezone.utc).isoformat(),
         "image": {
@@ -102,34 +147,33 @@ def save_image_cache(payload: dict, config_dict: dict) -> tuple[Path, Path]:
         "config": config_dict,
         "config_id": config_id,
         "n_faces": payload["n_faces"],
-        "arrays": {
-            "indices": list(payload["indices"].shape),
-            "bboxes": list(payload["bboxes"].shape),
-            "det_scores": list(payload["det_scores"].shape),
-            "embeddings": list(payload["embeddings"].shape),
-            "crops": list(payload["crops"].shape),
-            "kps": list(payload["kps"].shape),
-            "landmark_3d_68": list(payload["landmark_3d_68"].shape),
-            "gender": list(payload["gender"].shape),
-            "age": list(payload["age"].shape),
+        "regions": {
+            "version": config_dict.get("regions_version"),
+            "extraction_mode": config_dict.get("region_extraction_mode"),
+            "embedding_model": config_dict.get("region_embedding_model"),
         },
+        "arrays": arrays,
     }
 
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
-    np.savez_compressed(
-        data_path,
-        indices=payload["indices"],
-        bboxes=payload["bboxes"],
-        det_scores=payload["det_scores"],
-        embeddings=payload["embeddings"],
-        crops=payload["crops"],
-        kps=payload["kps"],
-        landmark_3d_68=payload["landmark_3d_68"],
-        gender=payload["gender"],
-        age=payload["age"],
-    )
+    npz_payload = {
+        "indices": payload["indices"],
+        "bboxes": payload["bboxes"],
+        "det_scores": payload["det_scores"],
+        "embeddings": payload["embeddings"],
+        "crops": payload["crops"],
+        "kps": payload["kps"],
+        "landmark_3d_68": payload["landmark_3d_68"],
+        "gender": payload["gender"],
+        "age": payload["age"],
+    }
+    for key in optional_region_arrays:
+        if key in payload and payload[key] is not None:
+            npz_payload[key] = payload[key]
+
+    np.savez_compressed(data_path, **npz_payload)
 
     return meta_path, data_path
 
@@ -162,5 +206,9 @@ def inspect_one_cache(cache_dir: Path) -> dict:
         "embedding_shape": tuple(npz["embeddings"].shape),
         "bbox_shape": tuple(npz["bboxes"].shape),
         "crop_shape": tuple(npz["crops"].shape),
+        "regions": meta.get("regions"),
+        "region_embedding_shape": (
+            tuple(npz["region_embeddings"].shape)
+            if "region_embeddings" in npz.files else None
+        ),
     }
-

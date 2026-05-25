@@ -94,6 +94,28 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 - **Siguiente recomendado**: no seguir con clasificadores full-face sobre los mismos
   scores; pasar a features nuevas (#4/#5/#7 antes de #11).
 
+---
+
+## 2026-05-25 · [codex] · #4/#7 cerradas, #5 iniciado
+
+- **Hice #4**: nuevo `src/phyloface/regions/geometric_features.py` con
+  `region_geometry`, `face_geometric_features` y `pair_geometric_differences`.
+  Calcula bboxes/centroides, proporciones, distancias, ángulos y simetrías
+  normalizadas por distancia interocular. Re-export desde `phyloface.regions`.
+- **Hice #7**: `core/cache.py` acepta `regions_version`, `region_extraction_mode`
+  y `region_embedding_model`; esos campos entran al `config_id`. `save_image_cache`
+  soporta arrays regionales opcionales (`region_embeddings`, `region_valid`, etc.)
+  sin romper caches viejos.
+- **Avance #5**: nuevo `regions/regional_embeddings.py` y script
+  `scripts/validate_region_embeddings_kinfacew.py`. Sanity KinFaceW-I limitado
+  (`--limit 12`) corrió end-to-end: AUC regionales preliminares 0.467–0.674, 4
+  fallos de imagen. No alcanza para cerrar calidad; #5 queda en progreso.
+- **Verificación**: `py_compile` OK; smoke
+  `tests/smoke/test_regions_level_a_and_cache.py` OK; logs #5 en
+  `_meta/TAREA5_region_embeddings_sanity*.log`.
+- **Ojo térmico**: sanity #5 llegó a `temp_max=96°C`. Repetir con límites más
+  conservadores antes de intentar KinFaceW-I amplio.
+
 ## 2026-05-25 · [codex] · #6 commiteado y pusheado
 
 - **Rama / commits**: `main`, commits `183064c` y `ab4f011`, pusheados a

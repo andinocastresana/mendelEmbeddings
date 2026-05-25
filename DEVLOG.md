@@ -11,6 +11,41 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `pendiente` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5` `T7✓`
+
+Se abre el bloque regional posterior al contrato canónico de #2/#3. La decisión
+fue separar API pura y cache antes de usar embeddings regionales como señal de
+producto.
+
+- **#4 cerrado**: `src/phyloface/regions/geometric_features.py` agrega
+  `region_geometry`, `face_geometric_features` y `pair_geometric_differences`.
+  Calcula bboxes/centroides, distancias, proporciones, ángulos y simetrías
+  izquierda/derecha normalizadas por distancia interocular. Re-export desde
+  `phyloface.regions`.
+- **#7 cerrado**: `src/phyloface/core/cache.py` extiende `make_config_dict` con
+  `regions_version`, `region_extraction_mode` y `region_embedding_model`; el
+  `config_id` ahora diferencia, por ejemplo,
+  `regions-v2.0__masked__w600k_r50`. `save_image_cache` soporta arrays
+  regionales opcionales (`region_names`, `region_embeddings`, `region_bboxes`,
+  `region_mask_fill`, `region_valid`) sin romper caches existentes.
+- **#5 iniciado**: `src/phyloface/regions/regional_embeddings.py` define
+  `REGIONAL_EMBEDDINGS_VERSION = "regions-v2.0+arcface-crop-v0.1"`, extracción
+  de embeddings por crop/máscara regional, comparación por coseno y serialización
+  a arrays. `scripts/validate_region_embeddings_kinfacew.py` corre sanity contra
+  KinFaceW.
+- **Resultado #5 limitado**: KinFaceW-I `--limit 12` por relación corrió end-to-end
+  con 4 fallos de imagen. AUC preliminares por región: rango 0.467–0.674
+  (`right_cheekbone` 0.674, `forehead` 0.649, `nose` 0.632). No es evidencia
+  suficiente para cerrar calidad regional; #5 queda en progreso.
+- **Verificación**: `py_compile` OK; smoke
+  `tests/smoke/test_regions_level_a_and_cache.py` OK. Logs:
+  `_meta/TAREA5_region_embeddings_sanity.log` y
+  `_meta/TAREA5_region_embeddings_sanity_resources.log` (`cpu_avg=40%`,
+  `cpu_max=62%`, `temp_avg=80°C`, `temp_max=96°C`).
+- **Nota operativa**: cualquier repetición amplia de #5 debe usar límites/pausas
+  más conservadores. La re-aplicación de ArcFace a parches regionales sigue siendo
+  sanity, no modelo validado.
+
 ### `1949296` · [codex] Tarea #29 — CCMTL-lite full-face antes de regiones `T29✓`
 
 Se abre una tarea intermedia tras leer `data/input/docs/notebookLM_SoTA_I.pdf` y
