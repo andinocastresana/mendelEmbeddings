@@ -1,7 +1,25 @@
 // =========================================
 // ID: PHYLOFACE_LIB_PIPELINE
-// VERSION: v1.2
+// VERSION: v1.4
 // =========================================
+// Cambio v1.3 → v1.4 (fix de concurrencia ONNX — habilita occlusion):
+// - `runSessionExclusive`: cola de promesas que serializa TODO `session.run()`.
+//   onnxruntime-web NO admite runs concurrentes sobre una misma sesión: dos runs
+//   solapados corrompen el estado interno del backend (síntoma observado:
+//   "Cannot read properties of null (reading 'Kd')"). La sesión es compartida
+//   entre `computeEmbedding` (este archivo) y el occlusionScorer (re-corre ~12
+//   inferencias por progenitor, lib/regionalScorers.ts), así que sin esta cola
+//   el "Calcular" de occlusion podía solaparse con un `processSlot` del Comparador
+//   todavía en vuelo. Ambos call-sites pasan ahora por la cola.
+//
+// Cambio v1.2 → v1.3 (Tareas #9/#10/#16 — scores regionales en cliente):
+// - `PipelineOutput` ahora incluye `meshLandmarksImage` (478×2 image-space),
+//   `landmarksAligned` (478×2 en el espacio alineado 112×112, vía M) y `M`
+//   (la afín 2×3 src→aligned). Los scorers regionales los necesitan: el
+//   geométrico opera sobre landmarks; el de occlusion ubica las regiones sobre
+//   la cara alineada para enmascararlas y re-embeddear. Aditivo: los callers
+//   viejos (spike #004) ignoran los campos nuevos.
+//
 // Cambio v1.1 → v1.2 (Tarea #26 paso 6 — export/import del árbol):
 // - `MODEL_VERSION`: identificador de la versión del modelo de embedding.
 //   Lo consume `lib/treeExport.ts` para etiquetar el export: los embeddings
@@ -90,6 +108,15 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
 }
 
+// Aplica una afín 2×3 [[a,b,tx],[d,e,ty]] a un punto (x,y).
+// M de estimateNormSimilarity mapea image-space → aligned 112×112.
+export function applyAffine(M: number[][], x: number, y: number): [number, number] {
+  return [
+    M[0][0] * x + M[0][1] * y + M[0][2],
+    M[1][0] * x + M[1][1] * y + M[1][2],
+  ];
+}
+
 // -----------------------------------------
 // IO: cargar imagen desde URL como HTMLImage + ImageData RGBA.
 // HTMLImage lo necesita MediaPipe (detecta sobre el elemento img);
@@ -169,6 +196,23 @@ export async function initFaceLandmarker(): Promise<FaceLandmarker> {
 }
 
 // -----------------------------------------
+// Cola de ejecución de la sesión ONNX. onnxruntime-web NO admite `session.run()`
+// concurrentes sobre una misma sesión: dos runs solapados corrompen el estado
+// interno del backend ("Cannot read properties of null (reading 'Kd')"). Como la
+// sesión es compartida entre el pipeline y los scorers regionales (occlusion),
+// serializamos todo run encadenando promesas: cada uno espera a que el anterior
+// termine (resuelva o rechace). Hay una sola sesión en la app, así que una cola
+// global es correcta; con múltiples sesiones habría que keyear por sesión.
+// -----------------------------------------
+let sessionRunChain: Promise<unknown> = Promise.resolve();
+export function runSessionExclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const result = sessionRunChain.then(fn, fn);
+  // Un rechazo de un run no debe romper la cadena para los siguientes.
+  sessionRunChain = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+// -----------------------------------------
 // Init: ONNX session. modelUrl debe servir w600k_r50.onnx (o compatible
 // con ArcFace 112×112 input, 512-d output).
 // -----------------------------------------
@@ -192,6 +236,9 @@ export interface PipelineOutput {
   embedding: Float32Array;       // 512-d, sin L2-normalize (cosineSimilarity normaliza)
   kps: number[][];                // 5×2 en image-space (px de la imagen original)
   aligned: ImageData;             // cara warped a 112×112 RGBA (útil para preview)
+  meshLandmarksImage: number[][]; // 478×2 Face Mesh en image-space (px imagen original)
+  landmarksAligned: number[][];   // 478×2 Face Mesh en el espacio alineado 112×112
+  M: number[][];                  // afín 2×3 src(image)→aligned (estimateNormSimilarity)
   timings: PipelineTimings;
 }
 
@@ -233,6 +280,13 @@ export async function computeEmbedding(
   const aligned = warpAffineBilinearReplicate(imageData, M, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
   const alignMs = performance.now() - tAlign0;
 
+  // Landmarks completos (478) en image-space y mapeados al espacio alineado
+  // 112×112 (vía M). Los consumen los scorers regionales (lib/regionalScores.ts).
+  const meshLandmarksImage: number[][] = meshLandmarks.map((lm) => [lm.x * W, lm.y * H]);
+  const landmarksAligned: number[][] = meshLandmarksImage.map(
+    ([x, y]) => applyAffine(M, x, y) as number[],
+  );
+
   // Preprocess: RGBA → NCHW float32 normalizado.
   const tPre0 = performance.now();
   const tensorData = imageDataToTensorRGB(aligned);
@@ -243,7 +297,7 @@ export async function computeEmbedding(
   const inputName = session.inputNames[0];
   const outputName = session.outputNames[0];
   const tensor = new ort.Tensor('float32', tensorData, [1, 3, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
-  const outputs = await session.run({ [inputName]: tensor });
+  const outputs = await runSessionExclusive(() => session.run({ [inputName]: tensor }));
   const inferMs = performance.now() - tInf0;
   const embedding = new Float32Array(outputs[outputName].data as Float32Array);
 
@@ -251,6 +305,9 @@ export async function computeEmbedding(
     embedding,
     kps,
     aligned,
+    meshLandmarksImage,
+    landmarksAligned,
+    M,
     timings: { detectMs, alignMs, preprocessMs, inferMs },
   };
 }

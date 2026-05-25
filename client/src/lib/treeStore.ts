@@ -312,3 +312,18 @@ export async function deleteComparison(id: ComparisonId): Promise<void> {
   const tx = db.transaction(STORE_COMPARISONS, 'readwrite');
   await req(tx.objectStore(STORE_COMPARISONS).delete(id));
 }
+
+// Comparison del par (a,b) sin importar el orden p1/p2 — la usa el panel de
+// scores por región para upsertear `regional` sobre el registro del par (o
+// crear uno nuevo si todavía no existe). Filtra en memoria sobre el índice
+// by-tree (los árboles tienen pocas comparaciones; no amerita índice compuesto).
+export async function getComparisonForPair(
+  treeId: TreeId,
+  aId: PersonId,
+  bId: PersonId,
+): Promise<Comparison | null> {
+  const all = await listComparisons(treeId);
+  return all.find(
+    (c) => (c.p1Id === aId && c.p2Id === bId) || (c.p1Id === bId && c.p2Id === aId),
+  ) ?? null;
+}

@@ -1,7 +1,14 @@
 // =========================================
 // ID: PHYLOFACE_LIB_GENEALOGY
-// VERSION: v1.1
+// VERSION: v1.2
 // =========================================
+// Cambio v1.1 → v1.2 (Tareas #9/#10/#16 — scores por región persistidos):
+// - `Comparison` gana campo opcional `regional`: los scores por región (por
+//   método) se guardan en el MISMO registro que el cosine del par, así viven
+//   "como las comparaciones generales" del árbol. Opcional → las comparaciones
+//   viejas (solo cosine) siguen válidas. Import type-only de los tipos de
+//   `regionalScores` (se borra en runtime; el modelo sigue sin deps de runtime).
+//
 // Cambio v1.0 → v1.1 (Tarea #26 paso 5 — comparación on-demand):
 // - Agregado `ComparisonId` + `Comparison` interface + `newComparison(...)`.
 //   Una Comparison persiste el resultado de comparar dos Person del mismo
@@ -35,6 +42,8 @@
 //     definición ("ser ancestro de uno mismo" es lo único a prevenir). No hay
 //     que chequear ciclos generales porque cada nodo tiene a lo sumo 2 padres
 //     y los hijos no se almacenan explícitamente.
+
+import type { RegionalMethod, RegionalScoresResult } from './regionalScores';
 
 // -----------------------------------------
 // Tipos
@@ -86,6 +95,10 @@ export interface Comparison {
   cosine: number;
   /** Timestamp ms epoch. */
   computedAt: number;
+  /** Scores por región persistidos (Tareas #9/#10/#16), uno por método. Opcional:
+   *  ausente en comparaciones viejas (solo cosine). El RegionalScoresResult es
+   *  autodescriptivo (child↔este par), así que no depende del orden p1/p2. */
+  regional?: Partial<Record<RegionalMethod, RegionalScoresResult>>;
 }
 
 /**

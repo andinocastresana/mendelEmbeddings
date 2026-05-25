@@ -101,6 +101,7 @@ import {
   type TripletSlot,
 } from './lib/activeTriplet';
 import CalibrationModal from './CalibrationModal';
+import RegionalScoresPanel, { type RegionalPanelParent } from './RegionalScoresPanel';
 
 // -----------------------------------------
 // Slots y roles
@@ -664,6 +665,35 @@ function Comparator() {
             probabilidad de parentesco + percentiles + veredicto vs umbral.
           </p>
         </>
+      )}
+
+      {/* Scores por región (Tareas #4/#9/#10/#16) — UI desacoplada del algoritmo
+          vía selector de método; aparece con Hijo/a + ≥1 progenitor comparados. */}
+      {slots.child.result && (slots.left.result || slots.right.result) && (
+        <RegionalScoresPanel
+          child={slots.child.result}
+          parents={[
+            slots.left.result ? { side: 'left' as const, label: leftLabel, result: slots.left.result } : null,
+            slots.right.result ? { side: 'right' as const, label: rightLabel, result: slots.right.result } : null,
+          ].filter(Boolean) as RegionalPanelParent[]}
+          session={sessionRef.current}
+          busy={running}
+          link={
+            linkedTreeId && slots.child.personId && slots.child.sha256
+              ? {
+                  treeId: linkedTreeId,
+                  childPersonId: slots.child.personId,
+                  childSha256: slots.child.sha256,
+                  parents: {
+                    left: slots.left.personId && slots.left.sha256
+                      ? { personId: slots.left.personId, sha256: slots.left.sha256 } : undefined,
+                    right: slots.right.personId && slots.right.sha256
+                      ? { personId: slots.right.personId, sha256: slots.right.sha256 } : undefined,
+                  },
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Timings de la última corrida */}
