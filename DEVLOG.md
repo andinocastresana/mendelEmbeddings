@@ -11,6 +11,14 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### docs · [claude] Cierre de #9/#16 (lado cliente) + #10 diferida por recursos `T9✓` `T16✓` `T10`
+
+Tras la validación del usuario del panel de #30 ("me gusta como está"): se cierran
+**#9** (heatmap por regiones) y **#16** (radar/spider chart) — su lado cliente quedó
+cubierto por el panel del Comparador web. **#10** (occlusion sensitivity con ventana
+densa 12×12/16×16) queda **diferida** por el alto uso de recursos del barrido denso;
+la occlusion a nivel región de #30 cubre el caso liviano mientras tanto.
+
 ### `5c47367` · [claude] Panel de scores por región en el Comparador web + fix concurrencia ONNX `T30↑` `T30✓` `T9` `T10` `T16` `T4`
 
 Retomé la feature de scores por región (a medio construir en una sesión cortada por
