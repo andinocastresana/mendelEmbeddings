@@ -73,9 +73,20 @@ export interface CalibrationArtifact {
   modelVersion: string;         // debe coincidir con pipeline.MODEL_VERSION
   dataset: string;
   protocol: string;
+  primaryDataset?: string;
+  evaluationRole?: 'primary' | 'secondary-biased' | string;
+  warning?: string | null;
   note?: string;
   limit?: number | null;
   metrics: Record<Metric, Record<Relation, RelationCalibration>>;
+}
+
+export function calibrationWarning(cal: CalibrationArtifact): string | null {
+  if (cal.warning) return cal.warning;
+  if (cal.dataset === 'KinFaceW-II') {
+    return 'KinFaceW-II se reporta solo como referencia secundaria: sus pares positivos pueden compartir foto familiar original, introduciendo senales de captura/contexto que no son parentesco facial. Usar KinFaceW-I como evaluacion primaria.';
+  }
+  return null;
 }
 
 // Para cosine, "más alto = más parecido = más kin"; para euclídea sobre

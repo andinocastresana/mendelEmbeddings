@@ -44,6 +44,16 @@ from phyloface.benchmark import kinfacew, calibration  # noqa: E402
 REC_MODEL_PATH = Path.home() / ".insightface/models/buffalo_l/w600k_r50.onnx"
 MODEL_VERSION = "w600k_r50"
 REL_CODE_UP = {"fs": "FS", "md": "MD", "fd": "FD", "ms": "MS"}
+KINFACEW_II_WARNING = (
+    "KinFaceW-II se reporta solo como referencia secundaria: sus pares "
+    "positivos pueden provenir de la misma foto familiar, introduciendo senales "
+    "compartidas de captura/contexto que no son parentesco facial. KinFaceW-I "
+    "debe usarse como evaluacion primaria."
+)
+
+
+def dataset_warning(dataset: str) -> str | None:
+    return KINFACEW_II_WARNING if dataset.lower() == "kinfacew-ii" else None
 
 
 def read_max_temp_c():
@@ -179,7 +189,14 @@ def main():
         "modelVersion": MODEL_VERSION,
         "dataset": args.dataset,
         "protocol": "5fold-cv-official",
-        "note": "KinFaceW-I es la métrica honesta; -II tiene sesgo same-photo. Ver _meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md",
+        "primaryDataset": "KinFaceW-I",
+        "evaluationRole": "primary" if args.dataset == "KinFaceW-I" else "secondary-biased",
+        "warning": dataset_warning(args.dataset),
+        "note": (
+            "KinFaceW-I es la evaluacion primaria. KinFaceW-II tiene sesgo "
+            "same-photo y debe reportarse solo como referencia secundaria. "
+            "Ver _meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md"
+        ),
         "limit": args.limit or None,
         "metrics": artifact_metrics,
     }

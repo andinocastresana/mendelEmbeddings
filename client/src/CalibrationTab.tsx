@@ -16,6 +16,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  calibrationWarning,
   loadCalibration,
   RELATIONS,
   RELATION_LABEL,
@@ -61,6 +62,15 @@ export default function CalibrationTab() {
 
       {cal && (
         <>
+          {calibrationWarning(cal) && (
+            <div style={{
+              background: '#fff7e6', color: '#5f3b00', border: '1px solid #f1c56b',
+              padding: 12, borderRadius: 4, fontSize: 12, lineHeight: 1.5, margin: '12px 0',
+            }}>
+              <strong>Advertencia metodológica:</strong> {calibrationWarning(cal)}
+            </div>
+          )}
+
           {/* Metadata + toggle de métrica */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',

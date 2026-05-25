@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  calibrationWarning,
   loadCalibration,
   scoreValue,
   higherIsKin,
@@ -128,6 +129,16 @@ export default function CalibrationModal({
 
         {cal && score && (
           <>
+            {calibrationWarning(cal) && (
+              <div style={{
+                background: '#fff7e6', color: '#5f3b00', border: '1px solid #f1c56b',
+                padding: 10, borderRadius: 4, fontSize: 11, lineHeight: 1.45,
+                marginBottom: 12,
+              }}>
+                <strong>Advertencia metodológica:</strong> {calibrationWarning(cal)}
+              </div>
+            )}
+
             {/* Selector de relación */}
             <div style={{ marginBottom: 12, fontSize: 13 }}>
               <label>

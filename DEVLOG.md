@@ -11,6 +11,62 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `TBD` · [codex] Tarea #6 — disclaimer KinFaceW-II y evaluación completa de cabeza MLP `T6`
+
+**Cierre del experimento MLP de la Tarea #6 y refuerzo metodológico de
+KinFaceW-II.** El objetivo era decidir si una cabeza aprendida pequeña sobre
+embeddings ArcFace justificaba avanzar a export ONNX/browser, y dejar explícito
+el sesgo de KinFaceW-II antes de reportar ese dataset.
+
+- **Disclaimer KinFaceW-II versionado en contrato y UI**:
+  - `scripts/run_calibration_kinfacew.py` ahora emite `primaryDataset`,
+    `evaluationRole` y `warning` en el artefacto JSON. KinFaceW-I queda como
+    evaluación primaria; KinFaceW-II queda marcado como referencia secundaria
+    sesgada por "same-photo".
+  - `client/src/lib/calibration.ts` tipa esos campos y expone
+    `calibrationWarning`.
+  - `CalibrationTab.tsx` y `CalibrationModal.tsx` muestran una advertencia
+    metodológica cuando el artefacto cargado la trae o cuando el dataset es
+    KinFaceW-II.
+  - `client/public/calibration/KinFaceW-I_calibration.json` se actualizó de forma
+    no disruptiva (`warning: null`, `evaluationRole: primary`) para mantener el
+    contrato actual alineado.
+
+- **Cabeza MLP experimental**:
+  - Nuevo `scripts/train_kinship_mlp.py`: entrenamiento/evaluación con folds
+    oficiales de KinFaceW, usando features de par
+    `abs(e1-e2)` (512) + `e1*e2` (512) + cosine + euclidean = 1026 dims.
+  - Modelo inicial: `sklearn.neural_network.MLPClassifier`, capas `(64, 32)`,
+    `early_stopping=True`, una evaluación por relación y otra agregada `ALL`.
+  - El `--limit` para smokes ahora es estratificado por `fold+label`, evitando
+    folds degenerados con una sola clase.
+
+- **Corrida completa KinFaceW-I monitoreada**:
+  - Comando envuelto con `scripts/test-monitored.sh`, sin `--limit`.
+  - Resultado: la MLP **no mejora** el baseline de cosine crudo calibrado.
+
+| relación | baseline acc | baseline AUC | MLP acc | MLP AUC | Δ AUC |
+|---|---:|---:|---:|---:|---:|
+| FS | 0.731 | 0.812 | 0.615 | 0.672 | -0.140 |
+| MD | 0.655 | 0.746 | 0.649 | 0.708 | -0.038 |
+| FD | 0.624 | 0.677 | 0.512 | 0.531 | -0.146 |
+| MS | 0.599 | 0.681 | 0.491 | 0.514 | -0.167 |
+| ALL | 0.666 | 0.727 | 0.647 | 0.710 | -0.017 |
+
+- **Conclusión**: no conviene exportar esta MLP a ONNX todavía. Mantener el
+  cosine calibrado como baseline principal y pasar a regiones canónicas (#2/#3),
+  salvo que se quiera probar variantes más regularizadas.
+- **Artefactos**:
+  - `_meta/CALIBRACION_TAREA6_MLP_INFORME.pdf`: informe completo.
+  - `_meta/CALIBRACION_TAREA6_mlp_full.log`: salida completa de corrida.
+  - `_meta/CALIBRACION_TAREA6_mlp_full_resources.log`: CPU/temperatura.
+  - `_meta/CALIBRACION_TAREA6.md`: nota viva actualizada con resultados.
+- **Recursos**: corrida viable pero caliente: 33 muestras, CPU avg/max
+  `40%/76%`, temp avg/max `81.2°C/98°C`, 19 muestras `>=85°C`, 6 `>=95°C`.
+  Futuras corridas deben bajar batch size o aumentar pausas.
+- **Verificación**: `npm run build` OK con Node 20; `json.tool` OK para JSONs de
+  calibración; `py_compile` OK para scripts; PDF validado con `pdftotext`.
+
 ### `6a68553` · [claude] Infra de coordinación cross-agente (canal + inbox sincrónico) + entorno reproducible
 
 **Infra de proceso, sin tarea asociada.** A pedido del usuario: aislar los hilos

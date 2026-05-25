@@ -1,0 +1,55 @@
+[test-monitored] muestreo cada 3s → _meta/CALIBRACION_TAREA6_mlp_full_resources.log · comando: /home/diego/miniconda3/envs/face-sim/bin/python scripts/train_kinship_mlp.py --dataset KinFaceW-I --max-iter 300 --batch-size 80
+/home/diego/miniconda3/envs/face-sim/lib/python3.11/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error [Errno -2] Name or service not known>
+  data = fetch_version_info()
+/home/diego/.config/matplotlib is not a writable directory
+Matplotlib created a temporary cache directory at /tmp/matplotlib-3wd5gk3m because there was an issue with the default path (/home/diego/.config/matplotlib); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
+MLP kinship #6 — dataset=KinFaceW-I limit=todos hidden=(64, 32) max_iter=300
+Cargando solo modelo de reconocimiento (w600k_r50.onnx)...
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+rec_model OK
+
+[Father-Son] 312 pares; preparando embeddings/features...
+  embeds fs: 80/312 temp=80C
+  embeds fs: 160/312 temp=88C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds fs: 240/312 temp=83C
+  embeds fs: 312/312 temp=90C
+[test-monitored] WARN temp core_max 98°C sostenido
+[Mother-Daughter] 254 pares; preparando embeddings/features...
+  embeds md: 80/254 temp=91C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds md: 160/254 temp=89C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds md: 240/254 temp=89C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds md: 254/254 temp=88C
+[Father-Daughter] 268 pares; preparando embeddings/features...
+  embeds fd: 80/268 temp=90C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds fd: 160/268 temp=87C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds fd: 240/268 temp=88C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds fd: 268/268 temp=83C
+[Mother-Son] 232 pares; preparando embeddings/features...
+  embeds ms: 80/232 temp=85C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds ms: 160/232 temp=89C
+  [throttle] temp >= 85.0C -> pausa 6.0s
+  embeds ms: 232/232 temp=90C
+Entrenando/evaluando MLP FS (312 pares)...
+Entrenando/evaluando MLP MD (254 pares)...
+Entrenando/evaluando MLP FD (268 pares)...
+Entrenando/evaluando MLP MS (232 pares)...
+Entrenando/evaluando MLP ALL (1066 pares)...
+
+rel     n_pos  n_neg       acc       auc
+------------------------------------------
+FS        156    156     0.615     0.672
+MD        127    127     0.649     0.708
+FD        134    134     0.512     0.531
+MS        116    116     0.491     0.514
+ALL       533    533     0.647     0.710
+
+Artefacto escrito: /home/diego/Proyectos/0_code_(gitHub)/mendelEmbeddings/data/output/calibration/KinFaceW-I_mlp_head.json
+[test-monitored] resumen recursos: muestras=33  cpu_avg=39% cpu_max=76%  temp_avg=81°C temp_max=98°C (exit=0)

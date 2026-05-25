@@ -4,7 +4,10 @@
   "modelVersion": "w600k_r50",
   "dataset": "KinFaceW-I",
   "protocol": "5fold-cv-official",
-  "note": "KinFaceW-I es la m\u00e9trica honesta; -II tiene sesgo same-photo. Ver _meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md",
+  "primaryDataset": "KinFaceW-I",
+  "evaluationRole": "primary",
+  "warning": null,
+  "note": "KinFaceW-I es la evaluacion primaria. KinFaceW-II tiene sesgo same-photo y debe reportarse solo como referencia secundaria. Ver _meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md",
   "limit": null,
   "metrics": {
     "cosine": {

@@ -153,6 +153,12 @@ relación sobre coseno. Artefacto: `data/output/calibration/KinFaceW-I_calibrati
   MISMA foto familiar → un clasificador puede ganar >90% detectando "misma foto"
   sin medir parentesco). Nuestro spike usó -I (fotos distintas) → el 0.74 es
   honesto. Reportar -II solo como referencia, marcando el sesgo.
+- **Disclaimer obligatorio para KinFaceW-II**: "Los resultados sobre KinFaceW-II
+  deben interpretarse con cautela: los pares positivos pueden provenir de la
+  misma foto familiar, lo que introduce señales compartidas de captura/contexto
+  (iluminación, cámara, fondo, compresión, color, pose) que no son parentesco
+  facial. Por eso KinFaceW-I se usa como evaluación primaria; KinFaceW-II se
+  reporta solo como referencia secundaria."
 - **El resize 64→112 puede estar capando el AUC.** Las imágenes distribuidas son
   64×64 ya recortadas; ArcFace espera 112×112. Mitigación a evaluar en Fase A:
   pedir/usar las imágenes originales de KinFaceW y re-alinear con nuestro pipeline
@@ -176,6 +182,68 @@ relación sobre coseno. Artefacto: `data/output/calibration/KinFaceW-I_calibrati
    liviana servible al cliente.
 5. (Opcional, según gap) sub-test con imágenes originales re-alineadas a 112.
 6. Tras #6: evaluar Mejora 2 (cabeza MLP ONNX-portable) como tarea nueva.
+
+## Mejora 2 — cabeza MLP sobre embeddings ArcFace (inicio 2026-05-25)
+
+Se agregó el primer experimento reproducible en `scripts/train_kinship_mlp.py`.
+Mantiene los folds oficiales de KinFaceW y entrena una cabeza pequeña
+`sklearn-mlp` sobre features de par:
+
+- `abs(e1 - e2)` (512 dims)
+- `e1 * e2` (512 dims)
+- `cosine(e1, e2)` y `euclidean(e1, e2)`
+
+El objetivo de esta etapa no es exportar todavía, sino medir si una cabeza
+aprendida mejora el baseline honesto del cosine crudo antes de hacer trabajo de
+portabilidad ONNX. El script reporta accuracy/AUC por relación y `ALL`, y emite
+`data/output/calibration/<dataset>_mlp_head.json`.
+
+Smoke inicial ejecutado:
+
+```bash
+/home/diego/miniconda3/bin/conda run -n face-sim \
+  python scripts/train_kinship_mlp.py --dataset KinFaceW-I --limit 40 --max-iter 30 --batch-size 80
+```
+
+Resultado smoke (muestra estratificada por fold+label, no comparable con la
+corrida completa): `ALL acc=0.619`, `ALL AUC=0.624`. Sirve solo para validar la
+mecánica end-to-end.
+
+Corrida completa monitoreada ejecutada:
+
+```bash
+TEST_LOG_FILE=_meta/CALIBRACION_TAREA6_mlp_full_resources.log \
+SAMPLE_INTERVAL=3 TEMP_THRESHOLD=85 CPU_THRESHOLD=85 \
+./scripts/test-monitored.sh \
+  /home/diego/miniconda3/envs/face-sim/bin/python \
+  scripts/train_kinship_mlp.py --dataset KinFaceW-I --max-iter 300 --batch-size 80 \
+  > _meta/CALIBRACION_TAREA6_mlp_full.log 2>&1
+```
+
+Resultado completo contra el baseline de cosine crudo:
+
+| relación | baseline acc | baseline AUC | MLP acc | MLP AUC | Δ AUC |
+|----------|--------------|--------------|---------|---------|-------|
+| FS | 0.731 | 0.812 | 0.615 | 0.672 | -0.140 |
+| MD | 0.655 | 0.746 | 0.649 | 0.708 | -0.038 |
+| FD | 0.624 | 0.677 | 0.512 | 0.531 | -0.146 |
+| MS | 0.599 | 0.681 | 0.491 | 0.514 | -0.167 |
+| ALL | 0.666 | 0.727 | 0.647 | 0.710 | -0.017 |
+
+Conclusión: esta MLP (`64,32`, features 1026-d) **no mejora** el baseline de
+cosine crudo calibrado. En agregado queda cerca pero por debajo; por relación cae
+de forma marcada salvo MD. No conviene exportar esta cabeza a ONNX todavía.
+
+Recursos: `muestras=33`, `cpu_avg=40%`, `cpu_max=76%`, `temp_avg=81.2°C`,
+`temp_max=98°C`, 19 muestras `>=85°C`, 6 muestras `>=95°C`. Fue viable pero
+térmicamente exigente; futuras corridas deberían usar batch más chico o pausas
+más largas.
+
+Artefactos:
+- `data/output/calibration/KinFaceW-I_mlp_head.json`
+- `_meta/CALIBRACION_TAREA6_mlp_full.log`
+- `_meta/CALIBRACION_TAREA6_mlp_full_resources.log`
+- `_meta/CALIBRACION_TAREA6_MLP_INFORME.pdf`
 
 ## Relacionado
 - Bibliografía de datasets + métodos SOTA + mejoras: `_meta/BIBLIOGRAFIA_KINSHIP_DATASETS.md` (en preparación por agente de investigación).
