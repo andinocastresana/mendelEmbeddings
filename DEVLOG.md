@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
-### `271da30` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5` `T7✓`
+### `271da30` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5✓` `T7✓`
 
 Se abre el bloque regional posterior al contrato canónico de #2/#3. La decisión
 fue separar API pura y cache antes de usar embeddings regionales como señal de
@@ -33,18 +33,24 @@ producto.
   de embeddings por crop/máscara regional, comparación por coseno y serialización
   a arrays. `scripts/validate_region_embeddings_kinfacew.py` corre sanity contra
   KinFaceW.
-- **Resultado #5 limitado**: KinFaceW-I `--limit 12` por relación corrió end-to-end
-  con 4 fallos de imagen. AUC preliminares por región: rango 0.467–0.674
-  (`right_cheekbone` 0.674, `forehead` 0.649, `nose` 0.632). No es evidencia
-  suficiente para cerrar calidad regional; #5 queda en progreso.
+- **Resultado #5**: KinFaceW-I `--limit 12` corrió end-to-end; luego se amplió a
+  `--limit 40` con `--progress-every 5`, `--cool-threshold 80`, `--cool-secs 15`.
+  La corrida ampliada tuvo 20 fallos de imagen y AUC regionales débiles: máximo
+  `left_cheekbone` 0.621 / `right_cheekbone` 0.620, resto cerca de azar.
+  Conclusión: `regions-v2.0+arcface-crop-v0.1` no sirve como base de #11; ArcFace
+  full-face reaplicado a parches regionales no aporta señal suficiente sin
+  adaptación.
 - **Verificación**: `py_compile` OK; smoke
   `tests/smoke/test_regions_level_a_and_cache.py` OK. Logs:
-  `_meta/TAREA5_region_embeddings_sanity.log` y
-  `_meta/TAREA5_region_embeddings_sanity_resources.log` (`cpu_avg=40%`,
-  `cpu_max=62%`, `temp_avg=80°C`, `temp_max=96°C`).
-- **Nota operativa**: cualquier repetición amplia de #5 debe usar límites/pausas
-  más conservadores. La re-aplicación de ArcFace a parches regionales sigue siendo
-  sanity, no modelo validado.
+  `_meta/TAREA5_region_embeddings_sanity.log`,
+  `_meta/TAREA5_region_embeddings_sanity_resources.log`,
+  `_meta/TAREA5_region_embeddings_limit40.log`,
+  `_meta/TAREA5_region_embeddings_limit40_resources.log`, y
+  `_meta/TAREA5_region_embeddings_limit40.json`. Corrida `--limit 40`:
+  `cpu_avg=27%`, `cpu_max=71%`, `temp_avg=66°C`, `temp_max=96°C`.
+- **Backlog**: #4, #5 y #7 quedan cerradas. Siguiente recomendado: #11 debe usar
+  features geométricas (#4), scores visuales regionales existentes o un diseño
+  regional entrenado/adaptado para parches, no embeddings ArcFace regionales crudos.
 
 ### `1949296` · [codex] Tarea #29 — CCMTL-lite full-face antes de regiones `T29✓`
 

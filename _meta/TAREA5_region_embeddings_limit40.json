@@ -1,0 +1,287 @@
+{
+  "v": 1,
+  "computedAt": 1779718087104,
+  "dataset": "KinFaceW-I",
+  "limit": 40,
+  "modelVersion": "w600k_r50",
+  "regionalEmbeddingsVersion": "regions-v2.0+arcface-crop-v0.1",
+  "protocol": "5fold-cv-official",
+  "warning": "Sanity check: ArcFace se re-aplica a parches regionales, no a rostros completos.",
+  "nImageFailures": 20,
+  "sampleFailures": [
+    {
+      "image": "fs/fs_124_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fs/fs_060_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fs/fs_096_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fs/fs_020_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fs/fs_059_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fs/fs_065_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_042_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_031_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_035_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_119_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_007_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_078_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "md/md_023_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fd/fd_049_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fd/fd_007_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fd/fd_078_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "fd/fd_041_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "ms/ms_007_2.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "ms/ms_086_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    },
+    {
+      "image": "ms/ms_065_1.jpg",
+      "error": "No se detectaron landmarks faciales con MediaPipe."
+    }
+  ],
+  "results": {
+    "left_eyebrow": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5219080459770115,
+      "accuracy_std": 0.09063171394150622,
+      "threshold_mean": 0.9177441239356995,
+      "fold_accuracies": [
+        0.5862,
+        0.3871,
+        0.5833,
+        0.6129,
+        0.44
+      ],
+      "auc": 0.5224
+    },
+    "right_eyebrow": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5055761957730812,
+      "accuracy_std": 0.11117769771670107,
+      "threshold_mean": 0.848434180021286,
+      "fold_accuracies": [
+        0.6897,
+        0.4839,
+        0.375,
+        0.4194,
+        0.56
+      ],
+      "auc": 0.5528
+    },
+    "left_eye": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.49067000370782343,
+      "accuracy_std": 0.02244292084706237,
+      "threshold_mean": 0.9999990000000001,
+      "fold_accuracies": [
+        0.4828,
+        0.5161,
+        0.4583,
+        0.5161,
+        0.48
+      ],
+      "auc": 0.5
+    },
+    "right_eye": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.49067000370782343,
+      "accuracy_std": 0.02244292084706237,
+      "threshold_mean": 0.9999990000000001,
+      "fold_accuracies": [
+        0.4828,
+        0.5161,
+        0.4583,
+        0.5161,
+        0.48
+      ],
+      "auc": 0.5
+    },
+    "left_cheekbone": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5426996662958843,
+      "accuracy_std": 0.06252658099869705,
+      "threshold_mean": 0.8707180261611939,
+      "fold_accuracies": [
+        0.5517,
+        0.5161,
+        0.625,
+        0.5806,
+        0.44
+      ],
+      "auc": 0.6214
+    },
+    "right_cheekbone": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5141230997404523,
+      "accuracy_std": 0.0691361773448513,
+      "threshold_mean": 0.8583085834980011,
+      "fold_accuracies": [
+        0.5862,
+        0.4839,
+        0.4167,
+        0.4839,
+        0.6
+      ],
+      "auc": 0.6201
+    },
+    "left_cheek": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5455747126436782,
+      "accuracy_std": 0.04313411486186996,
+      "threshold_mean": 0.8165109872817993,
+      "fold_accuracies": [
+        0.5862,
+        0.5161,
+        0.5417,
+        0.4839,
+        0.6
+      ],
+      "auc": 0.5328
+    },
+    "right_cheek": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5471230997404524,
+      "accuracy_std": 0.06366516205000115,
+      "threshold_mean": 0.8529962778091431,
+      "fold_accuracies": [
+        0.5862,
+        0.5161,
+        0.5417,
+        0.4516,
+        0.64
+      ],
+      "auc": 0.5724
+    },
+    "nose": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.49421987393400074,
+      "accuracy_std": 0.07156531969687668,
+      "threshold_mean": 0.860558706521988,
+      "fold_accuracies": [
+        0.5862,
+        0.5161,
+        0.5417,
+        0.3871,
+        0.44
+      ],
+      "auc": 0.555
+    },
+    "mouth": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5888542825361512,
+      "accuracy_std": 0.04852865131780981,
+      "threshold_mean": 0.6554256200790405,
+      "fold_accuracies": [
+        0.5862,
+        0.6129,
+        0.5,
+        0.6452,
+        0.6
+      ],
+      "auc": 0.5783
+    },
+    "chin": {
+      "n_pos": 69,
+      "n_neg": 71,
+      "n_folds": 5,
+      "accuracy_mean": 0.5437011494252874,
+      "accuracy_std": 0.07287879308802588,
+      "threshold_mean": 0.7576513648033142,
+      "fold_accuracies": [
+        0.6552,
+        0.4516,
+        0.5833,
+        0.5484,
+        0.48
+      ],
+      "auc": 0.5754
+    },
+    "forehead": {
+      "n_pos": 69,
+      "n_neg": 70,
+      "n_folds": 5,
+      "accuracy_mean": 0.4919398365333462,
+      "accuracy_std": 0.08537980498667815,
+      "threshold_mean": 0.8843050718307495,
+      "fold_accuracies": [
+        0.5862,
+        0.4516,
+        0.4348,
+        0.3871,
+        0.6
+      ],
+      "auc": 0.5516
+    }
+  }
+}

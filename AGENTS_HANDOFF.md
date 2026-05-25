@@ -96,7 +96,7 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
-## 2026-05-25 · [codex] · #4/#7 cerradas, #5 iniciado
+## 2026-05-25 · [codex] · #4/#5/#7 cerradas
 
 - **Hice #4**: nuevo `src/phyloface/regions/geometric_features.py` con
   `region_geometry`, `face_geometric_features` y `pair_geometric_differences`.
@@ -106,15 +106,17 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
   y `region_embedding_model`; esos campos entran al `config_id`. `save_image_cache`
   soporta arrays regionales opcionales (`region_embeddings`, `region_valid`, etc.)
   sin romper caches viejos.
-- **Avance #5**: nuevo `regions/regional_embeddings.py` y script
-  `scripts/validate_region_embeddings_kinfacew.py`. Sanity KinFaceW-I limitado
-  (`--limit 12`) corrió end-to-end: AUC regionales preliminares 0.467–0.674, 4
-  fallos de imagen. No alcanza para cerrar calidad; #5 queda en progreso.
+- **#5 cerrado como validación negativa**: nuevo `regions/regional_embeddings.py`
+  y script `scripts/validate_region_embeddings_kinfacew.py`. Sanity ampliado
+  KinFaceW-I `--limit 40`: mejor AUC `left_cheekbone` 0.621 /
+  `right_cheekbone` 0.620, resto cerca de azar; 20 fallos de imagen. No usar
+  `regions-v2.0+arcface-crop-v0.1` como base de #11.
 - **Verificación**: `py_compile` OK; smoke
   `tests/smoke/test_regions_level_a_and_cache.py` OK; logs #5 en
   `_meta/TAREA5_region_embeddings_sanity*.log`.
-- **Ojo térmico**: sanity #5 llegó a `temp_max=96°C`. Repetir con límites más
-  conservadores antes de intentar KinFaceW-I amplio.
+- **Ojo térmico**: #5 con `--limit 40`, `--progress-every 5`, `--cool-threshold 80`
+  y `--cool-secs 15` tuvo `temp_avg=66°C`, `temp_max=96°C`; los picos son breves,
+  pero cualquier corrida regional amplia requiere pausas agresivas.
 
 ## 2026-05-25 · [codex] · #6 commiteado y pusheado
 

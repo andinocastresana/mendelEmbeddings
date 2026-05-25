@@ -98,6 +98,7 @@ def main():
     ap.add_argument("--limit", type=int, default=40, help="pares por relacion; 0 = todos")
     ap.add_argument("--cool-threshold", type=float, default=88.0)
     ap.add_argument("--cool-secs", type=float, default=6.0)
+    ap.add_argument("--progress-every", type=int, default=10, help="chequear temp cada N pares")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -139,7 +140,7 @@ def main():
                                 "label": int(p.label),
                                 "score": float(item["cosine"]),
                             })
-                if i % 10 == 0:
+                if i % max(1, args.progress_every) == 0:
                     temp = read_max_temp_c()
                     tstr = f"{temp:.0f}C" if temp is not None else "n/d"
                     print(f"  {REL_CODE_UP[rel]} {i}/{len(pairs)} temp={tstr}", flush=True)

@@ -1,0 +1,97 @@
+[test-monitored] muestreo cada 3s → _meta/TAREA5_region_embeddings_limit40_resources.log · comando: /home/diego/miniconda3/envs/face-sim/bin/python scripts/validate_region_embeddings_kinfacew.py --dataset KinFaceW-I --limit 40 --progress-every 5 --cool-threshold 80 --cool-secs 15 --out _meta/TAREA5_region_embeddings_limit40.json
+/home/diego/miniconda3/envs/face-sim/lib/python3.11/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error [Errno -2] Name or service not known>
+  data = fetch_version_info()
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+W0000 00:00:1779717372.069511      62 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1779717372.082761      63 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1779717372.086180      61 landmark_projection_calculator.cc:186] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
+Regional embeddings sanity #5 — dataset=KinFaceW-I limit=40 version=regions-v2.0+arcface-crop-v0.1
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+[FS] 40 pares
+  FS 5/40 temp=84C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 10/40 temp=88C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 15/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 20/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 25/40 temp=90C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 30/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 35/40 temp=89C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FS 40/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+[MD] 40 pares
+  MD 5/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 10/40 temp=83C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 15/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 20/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 25/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 30/40 temp=84C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 35/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MD 40/40 temp=83C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+[FD] 40 pares
+  FD 5/40 temp=84C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 10/40 temp=88C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 15/40 temp=83C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 20/40 temp=88C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 25/40 temp=83C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 30/40 temp=84C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 35/40 temp=89C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  FD 40/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+[MS] 40 pares
+  MS 5/40 temp=90C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 10/40 temp=89C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 15/40 temp=85C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 20/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 25/40 temp=88C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 30/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 35/40 temp=87C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+  MS 40/40 temp=84C
+  [throttle] temp >= 80.0C -> pausa 15.0s
+
+region              n_pos  n_neg      acc      auc
+------------------------------------------------------
+left_eyebrow           69     71    0.522    0.522
+right_eyebrow          69     71    0.506    0.553
+left_eye               69     71    0.491    0.500
+right_eye              69     71    0.491    0.500
+left_cheekbone         69     71    0.543    0.621
+right_cheekbone        69     71    0.514    0.620
+left_cheek             69     71    0.546    0.533
+right_cheek            69     71    0.547    0.572
+nose                   69     71    0.494    0.555
+mouth                  69     71    0.589    0.578
+chin                   69     71    0.544    0.575
+forehead               69     70    0.492    0.552
+
+Fallos de imagen: 20
+Artefacto escrito: _meta/TAREA5_region_embeddings_limit40.json
+[test-monitored] resumen recursos: muestras=175  cpu_avg=27% cpu_max=71%  temp_avg=66°C temp_max=96°C (exit=0)
