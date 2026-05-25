@@ -1,0 +1,48 @@
+[test-monitored] muestreo cada 3s → _meta/TAREA29_fullface_multitask_resources.log · comando: /home/diego/miniconda3/envs/face-sim/bin/python scripts/evaluate_fullface_multitask.py --dataset KinFaceW-I --batch-size 120 --cool-threshold 88 --out data/output/calibration/KinFaceW-I_fullface_multitask.json
+/home/diego/miniconda3/envs/face-sim/lib/python3.11/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error [Errno -2] Name or service not known>
+  data = fetch_version_info()
+[test-monitored] WARN temp core_max 88°C sostenido
+Full-face multi-task #29 — dataset=KinFaceW-I limit=todos C=0.25
+Cargando solo modelo de reconocimiento (w600k_r50.onnx)...
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+rec_model OK
+
+[Father-Son] 312 pares; computando scores full-face...
+  embeds fs: 120/312 temp=89C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds fs: 240/312 temp=90C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds fs: 312/312 temp=90C
+[test-monitored] WARN temp core_max 91°C sostenido
+[Mother-Daughter] 254 pares; computando scores full-face...
+  embeds md: 120/254 temp=92C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds md: 240/254 temp=87C
+  embeds md: 254/254 temp=90C
+[test-monitored] WARN temp core_max 95°C sostenido
+[Father-Daughter] 268 pares; computando scores full-face...
+  embeds fd: 120/268 temp=93C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds fd: 240/268 temp=90C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds fd: 268/268 temp=89C
+[Mother-Son] 232 pares; computando scores full-face...
+  embeds ms: 120/232 temp=94C
+  [throttle] temp >= 88.0C -> pausa 6.0s
+  embeds ms: 232/232 temp=89C
+
+modelo                                 rel       acc  auc/oof
+----------------------------------------------------------------
+baseline_youden_cosine                 ALL     0.666    0.727
+baseline_youden_euclidean              ALL     0.666    0.727
+logreg_global_cosine                   ALL     0.659    0.726
+logreg_global_cosine_euclidean         ALL     0.657    0.726
+logreg_shared_relation_offsets         ALL     0.660    0.734
+logreg_shared_relation_slopes          ALL     0.659    0.736
+logreg_per_relation_cosine_euclidean   FS      0.715    0.809
+logreg_per_relation_cosine_euclidean   MD      0.670    0.746
+logreg_per_relation_cosine_euclidean   FD      0.639    0.672
+logreg_per_relation_cosine_euclidean   MS      0.604    0.676
+
+Artefacto escrito: data/output/calibration/KinFaceW-I_fullface_multitask.json
+[test-monitored] resumen recursos: muestras=28  cpu_avg=39% cpu_max=61%  temp_avg=81°C temp_max=95°C (exit=0)

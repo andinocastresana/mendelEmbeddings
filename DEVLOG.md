@@ -11,6 +11,33 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `pendiente` · [codex] Tarea #29 — CCMTL-lite full-face antes de regiones `T29✓`
+
+Se abre una tarea intermedia tras leer `data/input/docs/notebookLM_SoTA_I.pdf` y
+`data/input/docs/notebookLM_SoTA_II.pdf`: antes de pasar a regiones/NMP, evaluar si
+queda mejora full-face de baja capacidad. La cabeza MLP de #6 no superó el baseline,
+pero eso solo descarta una frontera flexible sobre embeddings 512-d con pocos datos.
+
+- **Nota técnica**: `_meta/FULLFACE_MULTITASK_TAREA29.md` conserva la lectura de los
+  PDFs: CCMTL es la dirección más aprovechable localmente; FNN/ViT/aging GAN quedan
+  como investigación posterior por costo/datos; KinFaceW-I sigue siendo métrica
+  primaria y KinFaceW-II referencia secundaria por same-photo bias.
+- **Script nuevo**: `scripts/evaluate_fullface_multitask.py` compara baseline Youden
+  de coseno/euclídea contra regresiones logísticas pequeñas: global, global
+  cos+euc, offsets por relación FS/MD/FD/MS, slopes por relación, y modelos
+  independientes por relación. Usa folds oficiales, sin fuga train/test.
+- **Resultado KinFaceW-I completo**: baseline Youden coseno/euclídea acc 0.666 /
+  AUC 0.727. Los modelos compartidos por relación suben apenas el AUC
+  (`shared_offsets` 0.734, `shared_slopes` 0.736) pero bajan accuracy
+  (`0.660`/`0.659`). Los modelos independientes por relación no superan los AUC
+  históricos del baseline. Conclusión: señal marginal/no accionable; no reemplaza
+  al calibrador full-face actual.
+- **Logs**: `_meta/TAREA29_fullface_multitask.log` y
+  `_meta/TAREA29_fullface_multitask_resources.log` (`cpu_avg=39%`, `cpu_max=61%`,
+  `temp_avg=81°C`, `temp_max=95°C`). Próxima repetición con batch 60-80.
+- **Backlog**: #29 se cierra. Siguiente recomendado: features nuevas
+  (#4/#5/#7 antes de #11) en vez de más clasificadores full-face.
+
 ### `8edd1dd` · [codex] Tareas #2/#3 — contrato canónico de regiones y deuda regions v1 `T2✓` `T3✓`
 
 **Cierre de las tareas base del bloque regional M1.4.** Se formaliza la lista de

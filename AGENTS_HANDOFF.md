@@ -71,6 +71,29 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
   Nivel A o #7 cache versionada para regiones. No tocar `README.md`; Claude tiene
   #21 pausado en worktree.
 
+---
+
+## 2026-05-25 · [codex] · #29 CCMTL-lite full-face cerrado
+
+- **Contexto**: el usuario agregó `data/input/docs/notebookLM_SoTA_I.pdf` y
+  `data/input/docs/notebookLM_SoTA_II.pdf`. Lectura: útiles como mapa SoTA, no como
+  especificación cerrada. Conservamos la idea multi-task tipo CCMTL; dejamos FNN,
+  ViT y aging GAN como investigación posterior por costo/datos.
+- **Hice**: agregué `_meta/FULLFACE_MULTITASK_TAREA29.md`, script
+  `scripts/evaluate_fullface_multitask.py`, y cerré #29. El experimento
+  compara baseline Youden de coseno/euclídea contra regresiones logísticas pequeñas:
+  global, global cos+euc, offsets por relación, slopes por relación, y modelos
+  independientes por relación.
+- **Resultado KinFaceW-I**: baseline coseno/euclídea acc 0.666 / AUC 0.727.
+  Mejor AUC: `logreg_shared_relation_slopes` 0.736, pero acc 0.659. Señal marginal,
+  no accionable como reemplazo del calibrador actual. Modelos por relación tampoco
+  superan los AUC del baseline histórico.
+- **Recursos**: logs `_meta/TAREA29_fullface_multitask.log` y
+  `_meta/TAREA29_fullface_multitask_resources.log`. La corrida llegó a temp_max
+  95°C; repetir con `--batch-size 60` u `80`.
+- **Siguiente recomendado**: no seguir con clasificadores full-face sobre los mismos
+  scores; pasar a features nuevas (#4/#5/#7 antes de #11).
+
 ## 2026-05-25 · [codex] · #6 commiteado y pusheado
 
 - **Rama / commits**: `main`, commits `183064c` y `ab4f011`, pusheados a
