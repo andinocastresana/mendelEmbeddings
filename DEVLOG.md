@@ -33,6 +33,7 @@ producto.
   de embeddings por crop/máscara regional, comparación por coseno y serialización
   a arrays. `scripts/validate_region_embeddings_kinfacew.py` corre sanity contra
   KinFaceW.
+- **Cierre #5**: commit `92cb88f`.
 - **Resultado #5**: KinFaceW-I `--limit 12` corrió end-to-end; luego se amplió a
   `--limit 40` con `--progress-every 5`, `--cool-threshold 80`, `--cool-secs 15`.
   La corrida ampliada tuvo 20 fallos de imagen y AUC regionales débiles: máximo
