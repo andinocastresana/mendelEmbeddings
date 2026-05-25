@@ -56,3 +56,7 @@ client/.dev-resources*
 client/.heat-experiment*
 # Log del wrapper scripts/test-monitored.sh (corridas Python/test monitoreadas)
 .test-resources*
+
+# Scratch privado por agente de IA (ruido para otros agentes, no verdad del
+# proyecto). El canal compartido es AGENTS_HANDOFF.md (sí se commitea).
+_meta/agents/
