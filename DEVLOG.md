@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
-### `TBD` · [codex] Tarea #6 — disclaimer KinFaceW-II y evaluación completa de cabeza MLP `T6`
+### `183064c` · [codex] Tarea #6 — disclaimer KinFaceW-II y evaluación completa de cabeza MLP `T6`
 
 **Cierre del experimento MLP de la Tarea #6 y refuerzo metodológico de
 KinFaceW-II.** El objetivo era decidir si una cabeza aprendida pequeña sobre
