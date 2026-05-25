@@ -11,6 +11,38 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `TBD` · [codex] Tareas #2/#3 — contrato canónico de regiones y deuda regions v1 `T2✓` `T3✓`
+
+**Cierre de las tareas base del bloque regional M1.4.** Se formaliza la lista de
+regiones como contrato del motor y se documenta la deuda histórica de `regions v1`
+para no volver a depender de definiciones implícitas del notebook.
+
+- **Nuevo registry canónico**: `src/phyloface/regions/canonical.py`
+  (`PHYLOFACE_REGIONS_CANONICAL v1.0`) define `CANONICAL_REGIONS_VERSION =
+  "regions-v2.0"` y 12 `RegionSpec`:
+  `left_eyebrow`, `right_eyebrow`, `left_eye`, `right_eye`,
+  `left_cheekbone`, `right_cheekbone`, `left_cheek`, `right_cheek`, `nose`,
+  `mouth`, `chin`, `forehead`.
+- Cada región declara nombre estable, etiqueta, grupo anatómico, lateralidad,
+  par simétrico, fuente (`mediapipe-official`, `manual-approx`,
+  `derived-approx`), `landmark_idx`, `polygon_idx`, padding, estrategia de bbox,
+  estrategia de máscara y modos de extracción (`rect`, `masked`).
+- `src/phyloface/regions/__init__.py` re-exporta el registry y helpers:
+  `get_region_spec`, `regions_for_group`, `paired_region_names`.
+- **Deuda histórica de regions v1**: `_meta/REGIONS_V1_DEBT.md` documenta que
+  `regions v1` no era una API estable sino el período experimental previo a
+  `regions_v2`: nombres/listas repetidas localmente, sin versión de contrato ni
+  semántica de cache, y con métricas regionales visuales todavía no equivalentes
+  a embeddings regionales reales. También deja constancia de que los episodios KG
+  externos mencionados en `_meta/MIGRACION_TAREA1.md` no estaban disponibles en
+  las rutas locales de esta sesión; se rescataron las fuentes versionadas.
+- **Smoke test**: `tests/smoke/test_regions_canonical.py` valida versión, 12
+  nombres, índices dentro del rango MediaPipe Face Mesh 0..477, estrategias
+  válidas y simetrías izquierda/derecha.
+- **Backlog**: `TAREAS_PENDIENTES.md` mueve #2 y #3 a completadas. No se cambia
+  aún la lógica de extracción; el contrato congela el comportamiento vigente para
+  futuras migraciones (#4/#5/#7/#9/#11).
+
 ### `183064c` · [codex] Tarea #6 — disclaimer KinFaceW-II y evaluación completa de cabeza MLP `T6`
 
 **Cierre del experimento MLP de la Tarea #6 y refuerzo metodológico de

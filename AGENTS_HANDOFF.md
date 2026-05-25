@@ -50,6 +50,91 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-25 · [codex] · #2/#3 regiones canónicas cerradas
+
+- **Rama / commits**: `main`, commit pendiente al escribir esta entrada.
+- **Hice**: formalicé el contrato canónico de regiones en
+  `src/phyloface/regions/canonical.py` (`regions-v2.0`) con 12 `RegionSpec`,
+  re-export desde `phyloface.regions`, documentación de deuda histórica en
+  `_meta/REGIONS_V1_DEBT.md`, smoke `tests/smoke/test_regions_canonical.py`, y
+  `TAREAS_PENDIENTES.md` moviendo #2/#3 a completadas.
+- **Episodios**: busqué los episodios KG mencionados en
+  `_meta/MIGRACION_TAREA1.md` (`IA/memories/_meta/episodes/2026-05-20-*`) pero no
+  aparecieron en las rutas locales disponibles. Rescaté lo versionado: bitácora de
+  migración, cabeceras de módulos regionales y archivo experimental archivado.
+- **Verifiqué**: `py_compile` OK y smoke canónico OK con Python del env
+  `face-sim`.
+- **Abierto / handoff**: siguiente tramo recomendado = #4 features geométricas
+  Nivel A o #7 cache versionada para regiones. No tocar `README.md`; Claude tiene
+  #21 pausado en worktree.
+
+## 2026-05-25 · [codex] · #6 commiteado y pusheado
+
+- **Rama / commits**: `main`, commits `183064c` y `ab4f011`, pusheados a
+  `origin/main`.
+- **Hice**: a pedido del usuario, cerré el tramo de #6 con paths explícitos y sin
+  `git add -A`. Commit principal: `[codex] Tarea #6 disclaimer KinFaceW-II + eval
+  MLP`; segundo commit: `docs(DEVLOG): registra hash 183064c de #6 MLP`.
+- **Abierto / handoff**: avisé a Claude por inbox que puede mergear su README/#21.
+- **Ojo con**: `AGENTS_HANDOFF.md` y `.claude/worktrees/` quedaron fuera del
+  commit de #6. El working tree principal sigue teniendo esos cambios de
+  coordinación/worktree.
+
+## 2026-05-25 · [codex] · #6 MLP completa: no supera baseline
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: corrí la cabeza MLP completa de #6 sobre KinFaceW-I con folds
+  oficiales, sin `--limit`, usando `scripts/test-monitored.sh`. Generé informe
+  PDF en `_meta/CALIBRACION_TAREA6_MLP_INFORME.pdf`, logs en
+  `_meta/CALIBRACION_TAREA6_mlp_full.log` y
+  `_meta/CALIBRACION_TAREA6_mlp_full_resources.log`, y actualicé
+  `_meta/CALIBRACION_TAREA6.md`.
+- **Resultados**: la MLP no mejora el baseline de cosine crudo. `ALL`: baseline
+  acc/AUC `0.666/0.727` vs MLP `0.647/0.710`. Por relación, AUC: FS
+  `0.812→0.672`, MD `0.746→0.708`, FD `0.677→0.531`, MS `0.681→0.514`.
+- **Recursos**: corrida viable pero caliente: 33 muestras, CPU avg/max
+  `40%/76%`, temp avg/max `81.2°C/98°C`, 19 muestras `>=85°C`, 6 `>=95°C`.
+- **Abierto / handoff**: no conviene exportar esta MLP a ONNX todavía. Próximo
+  paso técnico recomendado: mantener cosine calibrado como baseline y pasar a
+  #2/#3 regiones canónicas, salvo que el usuario quiera probar variantes MLP más
+  regularizadas. No hubo commit/push porque falta pedido explícito del usuario.
+
+## 2026-05-25 · [codex] · #6 disclaimer KinFaceW-II + arranque cabeza MLP
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: tomé #6 para evitar solapamiento. Agregué disclaimer explícito de
+  KinFaceW-II en el runner de calibración, contrato JSON y UI (`CalibrationTab` /
+  `CalibrationModal`), más documentación en `_meta/CALIBRACION_TAREA6.md`. El
+  artefacto KinFaceW-I existente quedó con `primaryDataset`, `evaluationRole` y
+  `warning: null`. También agregué `scripts/train_kinship_mlp.py`, primer
+  experimento reproducible de cabeza MLP sobre embeddings ArcFace con features
+  `absdiff512+prod512+cosine+euclidean`, folds oficiales y salida JSON.
+- **Verifiqué**: `npm run build` con Node `v20.20.2` OK; `json.tool` OK para el
+  JSON público y el de `data/output`; `py_compile` OK para scripts. Smoke MLP
+  estratificado: `KinFaceW-I --limit 40 --max-iter 30` completó y emitió
+  `data/output/calibration/KinFaceW-I_mlp_head.json` (ALL acc 0.619 / AUC 0.624;
+  solo prueba mecánica, no comparable con corrida completa).
+- **Abierto / handoff**: siguiente paso de #6 = corrida completa monitoreada de
+  `scripts/train_kinship_mlp.py` sin `--limit`, idealmente vía wrapper de recursos
+  y vigilando temperatura. Después decidir si la cabeza MLP merece export ONNX.
+- **Ojo con**: Claude confirmó hands-off de #6 y tomó #21 en worktree paralelo.
+  No commitear con `git add -A` desde el tree principal mientras haya cambios de
+  coordinación/otros agentes sin revisar.
+
+## 2026-05-25 · [claude] · Tomo #21 (README) en worktree paralelo — fuera de #6
+
+- **Rama / commits**: worktree `.claude/worktrees/readme`, rama `readme` (base
+  `origin/main` = `88f7551`). Sin commits aún.
+- **Hice**: Codex tomó #6 (calibración/MLP) con 6 archivos sin commitear en el
+  working tree principal. Para paralelizar sin colisión me aíslo en un **git
+  worktree** y tomo la **Tarea #21 (escribir `README.md`)**, disjunta de #6. No
+  toco calibración/MLP.
+- **Abierto / handoff**: al terminar queda en la rama `readme` para mergear. La
+  coordinación (este handoff + inbox) la sigo editando en el working tree
+  **PRINCIPAL** para no bifurcar el canal (el worktree es solo para el código de #21).
+- **Ojo con**: nadie commitea en el tree principal mientras tus 6 archivos de #6
+  sigan sin commitear (los barrería). Avisá por el canal cuando commitees #6.
+
 ## 2026-05-25 · [claude] · Auto-chequeo de inbox al iniciar: mecanismo = instrucción (Codex no tiene startup hook)
 
 - **Rama / commits**: `main`, sin commits (working tree).

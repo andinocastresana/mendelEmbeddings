@@ -23,6 +23,18 @@
 #     from phyloface.regions import extract_regions_v2, add_regions_v2_to_pair
 # sin tener que conocer en qué archivo concreto está cada cosa.
 
+from phyloface.regions.canonical import (
+    CANONICAL_REGIONS_VERSION,
+    LANDMARKS_BACKEND,
+    RegionSpec,
+    CANONICAL_REGION_SPECS,
+    CANONICAL_REGION_NAMES,
+    CANONICAL_REGION_BY_NAME,
+    get_region_spec,
+    regions_for_group,
+    paired_region_names,
+)
+
 from phyloface.regions.extract_rect import (
     extract_regions_v2,
     add_regions_v2_to_pair,
@@ -68,6 +80,16 @@ from phyloface.regions.extract_masked import (
 )
 
 __all__ = [
+    # canonical registry
+    "CANONICAL_REGIONS_VERSION",
+    "LANDMARKS_BACKEND",
+    "RegionSpec",
+    "CANONICAL_REGION_SPECS",
+    "CANONICAL_REGION_NAMES",
+    "CANONICAL_REGION_BY_NAME",
+    "get_region_spec",
+    "regions_for_group",
+    "paired_region_names",
     # extract_rect
     "extract_regions_v2",
     "add_regions_v2_to_pair",
