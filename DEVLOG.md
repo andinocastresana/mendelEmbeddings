@@ -11,7 +11,7 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
-### `pendiente` · [codex] Tarea #29 — CCMTL-lite full-face antes de regiones `T29✓`
+### `1949296` · [codex] Tarea #29 — CCMTL-lite full-face antes de regiones `T29✓`
 
 Se abre una tarea intermedia tras leer `data/input/docs/notebookLM_SoTA_I.pdf` y
 `data/input/docs/notebookLM_SoTA_II.pdf`: antes de pasar a regiones/NMP, evaluar si
