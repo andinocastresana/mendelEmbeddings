@@ -60,3 +60,6 @@ client/.heat-experiment*
 # Scratch privado por agente de IA (ruido para otros agentes, no verdad del
 # proyecto). El canal compartido es AGENTS_HANDOFF.md (sí se commitea).
 _meta/agents/
+
+# Worktrees de Claude Code (aislamiento por sesión; no son verdad del proyecto)
+.claude/worktrees/

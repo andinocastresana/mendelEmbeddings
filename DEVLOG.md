@@ -11,6 +11,24 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-25
 
+### `25770ee` (merge `1a26878`) · [claude] README inicial del proyecto (Tarea #21) `T21✓` `T23✓`
+
+Escrito en paralelo al bloque regional de Codex, aislado en un git worktree
+(`worktree-readme`) y mergeado a `main` (`1a26878`) sin tocar #6 ni regiones.
+
+- `README.md` (antes vacío): descripción, objetivos (primario niño↔progenitores +
+  tangencial grupos), estado experimental, stack (motor Python `buffalo_l`/`w600k_r50`
+  + MediaPipe; cliente React+Vite browser-first), estructura del repo y del paquete
+  `phyloface`, requisitos e instalación (conda `face-sim` + Node 20 vía `.nvmrc`),
+  cómo correr (cliente dev/build, scripts del motor, smoke tests), layout de `data/`
+  (gitignored) y links a ARQUITECTURA/DATASETS/DEVLOG/TAREAS + convención multi-agente.
+- Cubre además **#23** (sección notebooks/jupytext + `sync_notebooks.sh`) y
+  **parcialmente #24** (nombra los submodelos de `buffalo_l`: `det_10g`, `w600k_r50`,
+  landmarks, `genderage`).
+- Hallazgo documentado: `mediapipe` lo usa `phyloface.landmarks` pero no está pineado
+  en `requirements.txt` (anotado como paso de instalación aparte).
+- Housekeeping: `.claude/worktrees/` agregado al `.gitignore`.
+
 ### `271da30` · [codex] Tareas #4/#5/#7 — features regionales, embeddings regionales y cache versionada `T4✓` `T5✓` `T7✓`
 
 Se abre el bloque regional posterior al contrato canónico de #2/#3. La decisión
