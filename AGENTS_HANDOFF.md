@@ -50,6 +50,94 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-26 · [codex] · Arranque vitrina 2026: fuentes + manifiesto Wikimedia
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: audité el estado real de Track 1/vitrina. Hay 4 fotos grupales en
+  `data/input/img/teams/`, caches/heatmaps offline, pero no vista React `/teams` ni
+  `teams_embeddings.json`. El usuario definió la vitrina como Mundial
+  Mexico-USA-Canada 2026; formaciones viejas/no-clasificadas quedan como auxiliares.
+  Agregué `_meta/VITRINA_EQUIPOS_FUENTES.md` con decisión de fuentes: FIFA para
+  roster canonico, Wikimedia/Wikidata/Commons como primera fuente de imágenes
+  trazables, Kaggle solo fallback exploratorio. Agregué
+  `scripts/build_teams_photo_manifest.py`, que ahora usa 2026 por defecto
+  (`--tournament northamerica2026`) y mantiene Qatar 2022 como fallback histórico
+  (`--tournament qatar2022`). Toma squads de Wikipedia por sección, resuelve
+  jugadores en Wikidata, lee imagen `P18` y metadata/licencia de Commons, y
+  opcionalmente descarga imágenes. Por defecto solo genera manifiesto.
+- **Verifiqué**: `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile
+  scripts/build_teams_photo_manifest.py` OK; `--help` OK; smoke 2022 con red:
+  `Argentina France --max-per-team 2` genera Argentina 2/2 y Francia 2/2 imágenes.
+  Smoke 2026 con red:
+  `Argentina Canada --max-per-team 2 --output data/output/teams/smoke_manifest_wikimedia_northamerica2026.json`
+  genera Argentina 2/2 y Canada 2/2 imágenes. El primer smoke detectó y se corrigió
+  limpieza de nombres con `(captain)` (Hugo Lloris).
+- **Abierto / handoff**: siguiente paso natural = correr manifiesto completo 2026
+  para selecciones piloto (Argentina/France/Spain/Mexico/United States/Canada),
+  revisar cobertura/licencias/calidad, luego activar `--download-images` y pasar QC
+  facial antes de generar JSON público.
+- **Ojo con**: Wikipedia aplica throttling/429; el script tiene retry/backoff, pero
+  las corridas pueden tardar. Las listas 2026 son provisionales hasta el 2026-06-02
+  aprox.; el manifiesto guarda `squad_status`. Wikidata `P18` puede traer fotos de
+  club u otra época, no headshots oficiales del Mundial: requiere QC.
+
+### Update mismo dia — puntos 1/2/3 piloto
+
+- **Hice**: optimicé `scripts/build_teams_photo_manifest.py`: 2026 sigue default,
+  se puede pasar `--squads-html` para evitar re-descargar Wikipedia desde Python,
+  extrae links de jugadores desde la tabla HTML, decodifica títulos percent-encoded
+  (`Mart%C3%ADnez`), resuelve Wikidata/Commons en batch, agrega progreso por equipo
+  y `--search-fallback` opcional (apagado por default para no bloquear por búsquedas
+  individuales).
+- **Resultado usable**: por throttling `429` de Commons/Wikipedia no completó aún el
+  piloto ampliado de 6 selecciones. Para avanzar, usé el smoke 2026 ya validado
+  (Argentina/Canada, 2 jugadores por selección), revisé licencias y descargué 4
+  imágenes trazables a `data/input/img/teams_players/northamerica2026/`:
+  Emiliano Martínez (CC BY 4.0), Gerónimo Rulli (CC0), Maxime Crépeau (CC BY 4.0),
+  Dayne St. Clair (CC BY 2.0). Generé manifiesto con rutas locales en
+  `data/output/teams/manifest_wikimedia_northamerica2026_smoke_downloaded.json` y
+  resumen en `data/output/teams/manifest_wikimedia_northamerica2026_smoke_review.json`
+  (ambos gitignored).
+- **Ojo con**: el wrapper de `exec_command` dejó algunas sesiones marcadas como
+  running aunque `ps` no muestra procesos Python reales. No hay proceso de scraper
+  vivo al cierre de esta nota.
+
+### Update mismo dia — corrección de escala tras feedback del usuario
+
+- **Hice**: el usuario reclamó correctamente que 4 imágenes era insuficiente.
+  Cambié de estrategia: dejé de depender de Commons/Wikipedia API (429) y bajé HTML
+  de páginas de jugadores con `curl`, extrayendo `og:image`/infobox image localmente.
+  Se armó un lote `max15` desde el HTML 2026 para Argentina, France, Spain, Mexico,
+  Canada; United States no tiene tabla de squad en la página 2026 actual (heading
+  existe, pero salta directo a Group E).
+- **Resultado**: 64 URLs de imagen extraídas, 52 descargadas a
+  `data/input/img/teams_players/northamerica2026_wikipedia_pages/`. Resumen:
+  Argentina 13/13, France 15/15, Spain 13/13, Mexico 6/13, Canada 5/10. 11 fallaron
+  por 429 incluso con retry lento. Manifiesto:
+  `data/output/teams/manifest_wikimedia_northamerica2026_pageimages_max15_downloaded.json`;
+  review:
+  `data/output/teams/manifest_wikimedia_northamerica2026_pageimages_max15_review.json`
+  (gitignored).
+- **Ojo con**: estas 52 imágenes vienen de `og:image`/infobox de Wikipedia y quedan
+  marcadas `NEEDS_COMMONS_REVIEW`; antes de publicar hay que resolver licencia/autor
+  por Commons para cada archivo. Siguiente paso técnico: QC facial sobre las 52.
+
+### Update mismo dia — ampliación todas las selecciones con tabla
+
+- **Hice**: amplié la recopilación a todas las selecciones con tabla de jugadores en
+  el HTML local de `2026 FIFA World Cup squads`: 40 selecciones. Para cada una tomé
+  hasta 8 jugadores, descargué 319 páginas HTML de jugadores con `curl`, extraje
+  `og:image`/infobox image y armé 271 URLs candidatas.
+- **Resultado**: descargadas 193 imágenes en
+  `data/input/img/teams_players/northamerica2026_all_max8/`; 77 fallaron por 429
+  incluso con retry lento. Manifiestos gitignored:
+  `data/output/teams/manifest_wikimedia_northamerica2026_all_max8_downloaded.json`
+  y `data/output/teams/manifest_wikimedia_northamerica2026_all_max8_review.json`.
+  Cobertura: 40 selecciones con al menos URL candidata; 193 imágenes locales.
+- **Ojo con**: todo este lote `all_max8` queda con licencia `NEEDS_COMMONS_REVIEW`
+  porque se extrajo desde páginas Wikipedia y no desde Commons `imageinfo`. Sirve ya
+  para QC facial/embeddings/prototipo, pero no para publicar sin atribución/licencia.
+
 ## 2026-05-25 · [claude] · Panel de scores por región (#30) + fix concurrencia ONNX — commiteado+pusheado
 
 - **Rama / commits**: `main`. `5c47367` (feature, 9 archivos de código) + el commit de
