@@ -9,6 +9,43 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-26
+
+### `aabc54a` · [codex] Arranca ingesta vitrina Mundial 2026 `T13` `T14` `T15`
+
+Se cambia el foco operativo del Track 1 / vitrina a **Mundial Mexico-USA-Canada
+2026**, manteniendo Qatar 2022 y formaciones historicas/no-clasificadas como
+material auxiliar.
+
+- **Decision de fuentes**: nuevo `_meta/VITRINA_EQUIPOS_FUENTES.md`. FIFA queda como
+  fuente canonica de roster/convocatorias; Wikimedia/Wikidata/Commons como fuente
+  preferida para imagenes trazables; Kaggle/Transfermarkt/federaciones quedan como
+  fallback, con cautela de terminos/licencia.
+- **Script de manifiesto**: nuevo `scripts/build_teams_photo_manifest.py`.
+  Soporta `--tournament northamerica2026` (default) y `--tournament qatar2022`,
+  `--squads-html` para trabajar desde HTML local, parsing de tablas de jugadores,
+  limpieza de marcadores como `(captain)`, decodificacion de titulos percent-encoded,
+  resolucion batch de Wikidata/Commons cuando la API esta disponible,
+  `--skip-commons-metadata` para trabajar con URLs directas y marcar
+  `NEEDS_COMMONS_REVIEW`, descarga opcional con `--download-images`, y progreso por
+  equipo/jugador.
+- **Dataset local gitignored generado durante la sesion**: desde el HTML local de
+  `2026 FIFA World Cup squads` se detectaron 40 selecciones con tabla, se descargaron
+  319 paginas HTML de jugadores con `curl`, se extrajeron 271 URLs candidatas de
+  imagen y quedaron **193 imagenes** locales en
+  `data/input/img/teams_players/northamerica2026_all_max8/` (46 MB). Los manifests
+  de salida quedan en `data/output/teams/` y no entran al commit por `data/`
+  gitignored.
+- **Limitacion deliberada**: el lote amplio viene de `og:image` / infobox de
+  Wikipedia, por lo que se marca `NEEDS_COMMONS_REVIEW`. Sirve para QC facial,
+  embeddings y prototipo visual, pero no para publicar sin resolver autor/licencia y
+  atribucion por Commons.
+- **KG**: se capturo episodio en el repo `IA` sobre la decision "recopilar amplio
+  primero, licencias despues" para destrabar prototipo sin degradar criterios de
+  publicacion.
+- **Verificacion**: `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile
+  scripts/build_teams_photo_manifest.py` OK.
+
 ## 2026-05-25
 
 ### docs · [claude] Cierre de #9/#16 (lado cliente) + #10 diferida por recursos `T9✓` `T16✓` `T10`
