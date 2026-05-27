@@ -1,7 +1,27 @@
 // =========================================
 // ID: PHYLOFACE_COMP_REGIONAL_PANEL
-// VERSION: v1.3
+// VERSION: v1.5
 // =========================================
+// Cambio v1.4 → v1.5 (Tarea #12 — persistencia + progreso): 2 cosas más, ambas
+// aditivas (el Comparador no las usa → queda igual):
+//   - `seedResults`: siembra la cache de scores al montar (App primaria restaurando
+//     occlusion+geométrico persistidos) sin recomputar; un ref evita que el effect
+//     de limpieza borre la siembra en el primer run.
+//   - Barra de PROGRESO real para occlusion: el scorer reporta done/total por
+//     región (RegionalScorerContext.onProgress) y la barra avanza región-a-región
+//     a través de los progenitores (mejor que un timer estimado).
+//
+// Cambio v1.3 → v1.4 (Tarea #12 — ajustes de apariencia App primaria): 2 props
+// OPCIONALES más (el Comparador no las pasa → queda igual):
+//   - `methodSelector='radio'|'tabs'`: la App primaria usa solapas (Geométrico |
+//     Occlusion) en vez de radios para el método.
+//   - `showInheritance`: muestra el resumen "herencia por región" (qué grupo gana
+//     cada progenitor, vía lib/verdict) ARRIBA de las barras, en este mismo
+//     recuadro (antes vivía en el VerdictPanel de la App primaria).
+// Además, cambio de comportamiento GENERAL (aplica también al Comparador): el botón
+// "Calcular" sólo aparece cuando hay que computar de verdad (método sin datos) o
+// mientras computa; "Recalcular" se eliminó (las caras son inmutables por corrida).
+//
 // Cambio v1.2 → v1.3 (Tarea #12 — App primaria): refactor ADITIVO, sin cambios
 // de comportamiento para callers existentes (Comparador).
 //   - Los helpers puros de agregación (DISPLAY_GROUPS, reparto P↔M, groupValues,
@@ -60,6 +80,7 @@ import {
   DISPLAY_GROUPS, rawScoreMap, perRegionValues, groupValues,
   type Scale, type GroupVal,
 } from './lib/regionalAggregate';
+import { buildRegionalVerdict } from './lib/verdict';
 import { regionBoxesAligned } from './lib/regionalScorers';
 import { newComparison } from './lib/genealogy';
 import { getComparisonForPair, saveComparison } from './lib/treeStore';
@@ -102,6 +123,15 @@ export interface RegionalScoresPanelProps {
    *  Lo usa la App primaria para construir el veredicto sincronizado. Pasar un
    *  callback ESTABLE (useCallback) para que no dispare en cada render. */
   onResults?: (method: RegionalMethod, bySide: Partial<Record<Side, RegionalScoresResult>>) => void;
+  /** Selector de método: 'radio' (default, como el Comparador) o 'tabs' (solapas,
+   *  App primaria). */
+  methodSelector?: 'radio' | 'tabs';
+  /** Si true, muestra el resumen de "herencia por región" (qué grupo facial gana
+   *  cada progenitor) arriba de las barras. Requiere 2 progenitores. App primaria. */
+  showInheritance?: boolean;
+  /** Resultados ya calculados con que SEMBRAR la cache al montar (App primaria
+   *  restaurando scores persistidos). Por método → bySide. Lo sembrado no se recomputa. */
+  seedResults?: Partial<Record<RegionalMethod, Partial<Record<Side, RegionalScoresResult>>>>;
 }
 
 // DISPLAY_GROUPS, GroupVal, rawScoreMap, perRegionValues y groupValues se
@@ -272,13 +302,17 @@ function Radar({ left, right }: { left?: Map<string, GroupVal>; right?: Map<stri
 // =========================================================
 type CacheEntry = { bySide: Partial<Record<Side, RegionalScoresResult>> };
 
-export default function RegionalScoresPanel({ child, parents, session, busy = false, link, autoCompute, onResults }: RegionalScoresPanelProps) {
+export default function RegionalScoresPanel({ child, parents, session, busy = false, link, autoCompute, onResults, methodSelector = 'radio', showInheritance = false, seedResults }: RegionalScoresPanelProps) {
   const [method, setMethod] = useState<RegionalMethod>('geometric');
   const [scale, setScale] = useState<Scale>('relative');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [computing, setComputing] = useState(false);
+  // Progreso de occlusion (done/total regiones) para una barra real; null si no computa.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Cache por método (retoque 1): cambiar el radio no recomputa.
+  // Cache por método (retoque 1): cambiar el radio no recomputa. Se siembra desde
+  // `seedResults` vía effect (ver más abajo), no en el init, para ser robusto al
+  // timing del montaje.
   const [resultsByMethod, setResultsByMethod] = useState<Partial<Record<RegionalMethod, CacheEntry>>>({});
 
   const scorer = getScorer(method);
@@ -323,6 +357,24 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child, leftParent?.result, rightParent?.result, linkKey]);
 
+  // Siembra la cache desde `seedResults` (App primaria restaurando scores
+  // persistidos), SIN pisar métodos ya computados. Robusto al timing: corre cuando
+  // seedResults llega, aunque sea DESPUÉS del montaje (por eso es effect y no init).
+  // Occlusion no se puede recomputar barato → depende de esta siembra para verse
+  // tras una recarga (geométrico igual lo recalcula el auto-cómputo).
+  useEffect(() => {
+    if (!seedResults || Object.keys(seedResults).length === 0) return;
+    setResultsByMethod((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const m of Object.keys(seedResults) as RegionalMethod[]) {
+        const bySide = seedResults[m];
+        if (bySide && !next[m]) { next[m] = { bySide }; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [seedResults]);
+
   // Persiste los scores recién calculados en el registro Comparison del par
   // (modo vinculado). Upsert: respeta el cosine/registro existente y solo agrega
   // `regional[method]`. Falla en silencio (no debe romper la UI).
@@ -346,13 +398,19 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
 
   async function compute() {
     if (!scorer || parents.length === 0 || occlusionNoSession || busy) return;
-    setComputing(true); setError(null);
+    setComputing(true); setError(null); setProgress(null);
     try {
-      const ctx = { session: session ?? undefined };
       const childData = toFaceData(child);
       const bySide: Partial<Record<Side, RegionalScoresResult>> = {};
+      let pIdx = 0;
       for (const p of parents) {
-        bySide[p.side] = await scorer.score(childData, toFaceData(p.result), ctx);
+        const base = pIdx;
+        bySide[p.side] = await scorer.score(childData, toFaceData(p.result), {
+          session: session ?? undefined,
+          // Progreso global a través de progenitores: cada uno aporta `total` pasos.
+          onProgress: (done, total) => setProgress({ done: base * total + done, total: parents.length * total }),
+        });
+        pIdx++;
       }
       setResultsByMethod((prev) => ({ ...prev, [method]: { bySide } }));
       await persistRegional(method, bySide);
@@ -360,6 +418,7 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setComputing(false);
+      setProgress(null);
     }
   }
 
@@ -424,39 +483,113 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
     </label>
   );
 
+  // Botón de cálculo: SOLO aparece cuando hace falta computar de verdad (sin datos
+  // para el método activo) o mientras computa. Si el dato ya está, no se muestra
+  // (recalcular no tiene sentido: las caras de entrada son inmutables; cambiarlas
+  // limpia la cache y el botón reaparece).
+  const calcButton = (!shown || computing) ? (
+    <button onClick={() => void compute()} disabled={computing || parents.length === 0 || occlusionNoSession || busy}
+      style={{ marginLeft: 'auto', padding: '5px 14px', borderRadius: 6, cursor: 'pointer' }}>
+      {computing ? 'Calculando…' : 'Calcular ▸'}
+    </button>
+  ) : null;
+
+  // Resumen de herencia (App primaria): qué grupo facial gana cada progenitor.
+  // Siempre por reparto P↔M (la pregunta es relativa), independiente de la escala
+  // elegida para las barras. Requiere 2 progenitores.
+  const inheritance = (showInheritance && shown && leftParent && rightParent)
+    ? buildRegionalVerdict(shown.bySide, {
+        method,
+        methodLabel: scorer?.label ?? method,
+        confidence: scorer?.baseConfidence ?? 'experimental',
+      })
+    : null;
+
+  const scaleRadios = (
+    <>
+      <strong>Escala:</strong>
+      {radio('rs-scale', scale === 'relative', () => setScale('relative'), 'Reparto P↔M')}
+      {radio('rs-scale', scale === 'absolute', () => setScale('absolute'), 'Absoluta')}
+    </>
+  );
+  const heatmapToggle = (
+    <label style={{ cursor: 'pointer' }}>
+      <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} /> Heatmap sobre el Hijo/a
+    </label>
+  );
+  const confLabel = scorer && (
+    <span style={{ color: '#888' }}>⚠ confiabilidad: {confidenceLabelEs(scorer.baseConfidence)}</span>
+  );
+
   return (
     <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 16, marginTop: 20 }}>
       <h3 style={{ margin: '0 0 10px' }}>Scores por región</h3>
 
-      {/* Controles */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4 }}>
-        <strong>Método:</strong>
-        {listScorers().map((s) => {
-          const cached = resultsByMethod[s.method] != null;
-          return (
-            <span key={s.method}>
-              {radio('rs-method', method === s.method, () => setMethod(s.method),
-                cached ? `${s.label} ✓` : s.label, s.method === 'occlusion' && !session)}
-            </span>
-          );
-        })}
-        <span style={{ width: 16 }} />
-        <strong>Escala:</strong>
-        {radio('rs-scale', scale === 'relative', () => setScale('relative'), 'Reparto P↔M')}
-        {radio('rs-scale', scale === 'absolute', () => setScale('absolute'), 'Absoluta')}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 13, marginBottom: 10 }}>
-        <label style={{ cursor: 'pointer' }}>
-          <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} /> Heatmap sobre el Hijo/a
-        </label>
-        {scorer && (
-          <span style={{ color: '#888' }}>⚠ confiabilidad: {confidenceLabelEs(scorer.baseConfidence)}</span>
-        )}
-        <button onClick={() => void compute()} disabled={computing || parents.length === 0 || occlusionNoSession || busy}
-          style={{ marginLeft: 'auto', padding: '5px 14px', borderRadius: 6, cursor: 'pointer' }}>
-          {computing ? 'Calculando…' : shown ? 'Recalcular ▸' : 'Calcular ▸'}
-        </button>
-      </div>
+      {methodSelector === 'tabs' ? (
+        <>
+          {/* Solapas de método (Geométrico | Occlusion) */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid #ddd' }}>
+            {listScorers().map((s) => {
+              const active = method === s.method;
+              const cached = resultsByMethod[s.method] != null;
+              // Deshabilitar solo si NO se puede ni computar (sin sesión) ni VER
+              // datos cacheados: ver lo persistido/cacheado no necesita sesión.
+              const disabled = s.method === 'occlusion' && !session && !cached;
+              return (
+                <button key={s.method} disabled={disabled} onClick={() => setMethod(s.method)}
+                  title={disabled ? 'Occlusion necesita el modelo ONNX cargado' : s.label}
+                  style={{
+                    padding: '8px 16px', cursor: disabled ? 'not-allowed' : 'pointer',
+                    border: '1px solid #ccc', borderBottom: active ? '1px solid #fff' : '1px solid #ccc',
+                    background: active ? '#fff' : '#f4f4f4', fontWeight: active ? 700 : 400,
+                    fontFamily: 'monospace', fontSize: 13, opacity: disabled ? 0.5 : 1,
+                    marginBottom: -1, borderRadius: '6px 6px 0 0',
+                  }}>
+                  {s.label}{cached ? ' ✓' : ''}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 13, marginBottom: 10 }}>
+            {scaleRadios}<span style={{ width: 8 }} />{heatmapToggle}{confLabel}{calcButton}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Controles (radios) — layout del Comparador */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4 }}>
+            <strong>Método:</strong>
+            {listScorers().map((s) => {
+              const cached = resultsByMethod[s.method] != null;
+              return (
+                <span key={s.method}>
+                  {radio('rs-method', method === s.method, () => setMethod(s.method),
+                    cached ? `${s.label} ✓` : s.label, s.method === 'occlusion' && !session && !cached)}
+                </span>
+              );
+            })}
+            <span style={{ width: 16 }} />
+            {scaleRadios}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 13, marginBottom: 10 }}>
+            {heatmapToggle}{confLabel}{calcButton}
+          </div>
+        </>
+      )}
+      {/* Barra de progreso real (occlusion): región-a-región a través de progenitores. */}
+      {computing && progress && progress.total > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>
+            Calculando… {progress.done}/{progress.total} regiones ({Math.round((progress.done / progress.total) * 100)}%)
+          </div>
+          <div style={{ background: '#eee', borderRadius: 4, height: 10, overflow: 'hidden' }}>
+            <div style={{
+              width: `${Math.round((progress.done / progress.total) * 100)}%`,
+              background: '#7c3aed', height: '100%', transition: 'width 120ms',
+            }} />
+          </div>
+        </div>
+      )}
       {scorer && <p style={{ margin: '0 0 4px', fontSize: 12, color: '#777' }}>{scorer.description}</p>}
       <p style={{ margin: '0 0 12px', fontSize: 12, color: '#999' }}>
         {scale === 'relative'
@@ -464,9 +597,24 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
           : 'Absoluta: score crudo 0..1 del método, independiente por progenitor.'}
         {' '}Los pares (cejas, ojos, pómulos, mejillas) se colapsan en una fila; la línea oscura marca el rango izquierda/derecha.
       </p>
-      {occlusionNoSession && <p style={{ color: '#b45309', fontSize: 12 }}>Occlusion necesita el modelo ONNX cargado (compará primero en el comparador).</p>}
+      {occlusionNoSession && !shown && <p style={{ color: '#b45309', fontSize: 12 }}>Occlusion necesita el modelo ONNX cargado (analizá primero, o esperá a que cargue tras una recarga).</p>}
       {busy && <p style={{ color: '#b45309', fontSize: 12 }}>Esperá a que termine la comparación de arriba para calcular scores por región.</p>}
       {error && <p style={{ color: '#dc2626', fontSize: 12 }}>Error: {error}</p>}
+
+      {/* Resumen de herencia por región (App primaria): qué hereda de cada progenitor. */}
+      {inheritance && leftParent && rightParent && (
+        <div style={{ borderTop: '1px solid #eee', borderBottom: '1px solid #eee', padding: '10px 2px', margin: '4px 0 14px' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>¿Por qué? — herencia por región</div>
+          <InheritedRow label={`Heredó de ${leftParent.label}:`} color={LEFT_COLOR} groups={inheritance.inheritedLeft.map((g) => g.label)} />
+          <InheritedRow label={`Heredó de ${rightParent.label}:`} color={RIGHT_COLOR} groups={inheritance.inheritedRight.map((g) => g.label)} />
+          {inheritance.balanced.length > 0 && (
+            <InheritedRow label="Equilibrado:" color="#888" groups={inheritance.balanced.map((g) => g.label)} />
+          )}
+          <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>
+            Según <strong>{inheritance.methodLabel}</strong> (confiabilidad {inheritance.confidence}).
+          </div>
+        </div>
+      )}
 
       {/* Cuerpo: progenitor · barras · Hijo/a · barras · progenitor */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -504,6 +652,21 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
         </div>
       </div>
       {!shown && !computing && <p style={{ textAlign: 'center', color: '#999', fontSize: 12 }}>Tocá «Calcular» para ver los scores por región.</p>}
+    </div>
+  );
+}
+
+// -----------------------------------------
+// Fila de herencia: "Heredó de X: a, b, c" (resumen de la App primaria, prop
+// showInheritance). Lista vacía → "—".
+// -----------------------------------------
+function InheritedRow({ label, color, groups }: { label: string; color: string; groups: string[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, fontSize: 13, marginBottom: 4, alignItems: 'baseline', flexWrap: 'wrap' }}>
+      <span style={{ minWidth: 120, fontWeight: 700, color }}>{label}</span>
+      <span style={{ color: '#333' }}>
+        {groups.length > 0 ? groups.join(', ') : <span style={{ color: '#bbb' }}>—</span>}
+      </span>
     </div>
   );
 }

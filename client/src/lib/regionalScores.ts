@@ -65,6 +65,9 @@ export interface RegionalScorerContext {
   session?: ort.InferenceSession;
   /** Subconjunto de regiones a evaluar; por defecto todas las canónicas. */
   regions?: RegionName[];
+  /** Progreso opcional (done/total) para métodos largos (occlusion): la UI lo
+   *  usa para una barra real región-a-región. Los métodos instantáneos lo ignoran. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 export interface RegionalScorer {

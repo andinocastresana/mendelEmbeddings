@@ -206,6 +206,7 @@ export const occlusionScorer: RegionalScorer = {
       // Yield entre runs: deja respirar a ORT/GPU (evita errores por muchas
       // inferencias encadenadas sin ceder el event loop).
       await new Promise((r) => setTimeout(r, 0));
+      ctx.onProgress?.(drops.length, regions.length);
     }
 
     // Score ABSOLUTO 0..1 = Δcos / escala fija. El panel hace la normalización

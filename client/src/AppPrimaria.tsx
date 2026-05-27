@@ -1,28 +1,31 @@
 // =========================================
 // ID: PHYLOFACE_APP_PRIMARIA
-// VERSION: v1.0
+// VERSION: v1.2
 // =========================================
 // App primaria — "¿A quién se parece?" (Tarea #12, el objetivo final del proyecto,
 // ver ARQUITECTURA.md §2.1). Superficie-producto niño-céntrica: tres fotos (Padre ·
-// Hijo/a · Madre) → un VEREDICTO interpretable arriba + el desglose visual
-// (radar/heatmap/barras por región) abajo.
+// Hijo/a · Madre) → un VEREDICTO interpretable + el desglose visual por región.
 //
-// Qué la distingue del Comparador (MVP): el Comparador es una herramienta genérica
-// y flexible (roles configurables, vínculo con el árbol, spikes al lado). Esta es
-// la lectura directa del producto: combina el parecido GLOBAL (coseno + posterior
-// calibrado de la Tarea #6) con el REGIONAL (reparto P↔M por zona facial) en un
-// resumen que responde "cuánto y por qué se parece a cada uno".
+// Cambio v1.1 → v1.2 (persistencia local pedida por el usuario): el estado se
+// guarda en IndexedDB LOCAL (lib/primariaStore) — fotos + PipelineOutput por slot.
+// Al recargar se restauran las fotos + el veredicto GLOBAL (de los embeddings,
+// sin inferencia) y el regional GEOMÉTRICO (de los landmarks, sin inferencia);
+// occlusion necesita re-analizar (re-init de la sesión ONNX). Botón "Limpiar"
+// borra el guardado. Sigue siendo 100% local: las imágenes nunca salen del browser.
 //
-// Reúso máximo: NO reimplementa motor. El pipeline e2e es `lib/pipeline.ts` (igual
-// que el Comparador); el desglose visual es `RegionalScoresPanel` (Tarea #30); la
-// calibración es `lib/calibration.ts` (Tarea #6); la síntesis es `lib/verdict.ts`.
-// El panel se auto-computa en geométrico (barato, sin GPU) y emite sus scores vía
-// `onResults` → el veredicto regional queda sincronizado con lo que muestran las
-// barras/radar. Occlusion sigue siendo opt-in dentro del panel.
+// Cambio v1.0 → v1.1 (ajustes de apariencia pedidos por el usuario):
+//   - Recuadro 1: las 3 fotos originales + el veredicto GLOBAL ("se parece más a X"
+//     + coseno/posterior por lado) en un MISMO recuadro (fotos arriba, global
+//     debajo). Antes el global vivía en un VerdictPanel separado.
+//   - La herencia por región se mudó al recuadro de "Scores por región"
+//     (RegionalScoresPanel con prop `showInheritance`), con los dos métodos en
+//     SOLAPAS (`methodSelector="tabs"`). El veredicto regional ya no se arma acá.
 //
-// Privacidad: idéntica al Comparador — las imágenes NUNCA salen del browser
-// (inference 100% client-side, sin upload). Sin persistencia: esta vista es
-// anónima (el árbol/tripleta es responsabilidad del Comparador/Árbol).
+// Qué la distingue del Comparador (MVP): el Comparador es genérico y flexible
+// (roles configurables, vínculo con árbol, spikes al lado). Esta es la lectura
+// directa del producto. Reúso máximo: NO reimplementa motor. Pipeline e2e =
+// lib/pipeline; desglose = RegionalScoresPanel (#30); calibración = lib/calibration
+// (#6). Privacidad: imágenes NUNCA salen del browser; sin persistencia.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as ort from 'onnxruntime-web';
@@ -39,23 +42,22 @@ import {
   loadCalibration, scoreValue, calibrationWarning,
   type ValueScore,
 } from './lib/calibration';
-import { getScorer, type RegionalMethod, type RegionalScoresResult } from './lib/regionalScores';
+import { buildGlobalVerdict, type GlobalVerdict, type Side } from './lib/verdict';
 import {
-  buildGlobalVerdict, buildRegionalVerdict,
-  type GlobalVerdict, type RegionalVerdict, type Side,
-} from './lib/verdict';
+  savePrimariaState, loadPrimariaState, clearPrimariaState,
+  type RestoredSlot, type RegionalCache,
+} from './lib/primariaStore';
+import type { RegionalMethod, RegionalScoresResult } from './lib/regionalScores';
 import RegionalScoresPanel, { type RegionalPanelParent } from './RegionalScoresPanel';
 
-// -----------------------------------------
 // Colores coherentes con RegionalScoresPanel (Padre=izquierda azul, Madre=derecha verde).
-// -----------------------------------------
 const PADRE_COLOR = '#2563eb';
 const MADRE_COLOR = '#16a34a';
 
 type SlotKey = 'padre' | 'child' | 'madre';
 
 // El Padre va al slot 'left' del panel; la Madre al 'right'. El veredicto usa
-// 'left'/'right' y se traducen acá a las etiquetas Padre/Madre.
+// 'left'/'right' y se traducen acá a Padre/Madre.
 const SLOT_TO_SIDE: Record<'padre' | 'madre', Side> = { padre: 'left', madre: 'right' };
 const SIDE_LABEL: Record<Side, string> = { left: 'Padre', right: 'Madre' };
 const SIDE_COLOR: Record<Side, string> = { left: PADRE_COLOR, right: MADRE_COLOR };
@@ -86,10 +88,8 @@ export default function AppPrimaria() {
   const [initStatus, setInitStatus] = useState<'idle' | 'initializing' | 'ready'>('idle');
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  // Veredicto: parte GLOBAL (la arma esta página) + parte REGIONAL (llega del
-  // panel vía onResults). Se resetean al re-analizar.
+  // Veredicto GLOBAL (el regional vive ahora dentro del panel). Se resetea al re-analizar.
   const [globalVerdict, setGlobalVerdict] = useState<GlobalVerdict | null>(null);
-  const [regionalVerdict, setRegionalVerdict] = useState<RegionalVerdict | null>(null);
   const [calWarning, setCalWarning] = useState<string | null>(null);
   const [calError, setCalError] = useState<string | null>(null);
 
@@ -99,6 +99,15 @@ export default function AppPrimaria() {
   // render (occlusion la usa; geométrico no la necesita). Se setea tras init.
   const [session, setSession] = useState<ort.InferenceSession | null>(null);
 
+  // Persistencia de scores regionales (occlusion + geométrico) para sobrevivir
+  // recargas: `regionalRef` acumula lo que emite el panel; `restoredRegional`
+  // siembra el panel al restaurar; `slotsRef` espeja slots para persistir sin
+  // depender del timing de setState.
+  const [restoredRegional, setRestoredRegional] = useState<RegionalCache>({});
+  const regionalRef = useRef<RegionalCache>({});
+  const slotsRef = useRef(slots);
+  useEffect(() => { slotsRef.current = slots; });
+
   // ---------------------------------------
   // Manejo de slots.
   // ---------------------------------------
@@ -107,9 +116,29 @@ export default function AppPrimaria() {
 
   const resetVerdict = () => {
     setGlobalVerdict(null);
-    setRegionalVerdict(null);
     setGlobalError(null);
   };
+
+  // Persiste el estado completo (slots actuales + cache regional) leyendo de refs,
+  // sin depender del timing de setState.
+  const persistAll = useCallback(() => {
+    const s = slotsRef.current;
+    const toPersist: Partial<Record<SlotKey, RestoredSlot>> = {};
+    (['padre', 'child', 'madre'] as const).forEach((k) => {
+      if (s[k].file) toPersist[k] = { file: s[k].file!, result: s[k].result ?? undefined };
+    });
+    void savePrimariaState(toPersist, regionalRef.current);
+  }, []);
+
+  // El panel emite sus scores (geométrico tras auto-cómputo, occlusion tras
+  // "Calcular"); los acumulamos y re-persistimos para que sobrevivan recargas.
+  const onRegionalResults = useCallback(
+    (method: RegionalMethod, bySide: Partial<Record<Side, RegionalScoresResult>>) => {
+      regionalRef.current = { ...regionalRef.current, [method]: bySide };
+      persistAll();
+    },
+    [persistAll],
+  );
 
   const onPickFile = (key: SlotKey, file: File | null) => {
     setSlots((prev) => {
@@ -125,6 +154,30 @@ export default function AppPrimaria() {
       };
     });
     resetVerdict();
+    regionalRef.current = {}; // cambiar una foto invalida los scores regionales previos
+    setRestoredRegional({});  // y la siembra restaurada (era de otras caras)
+    // Persistir solo las IMÁGENES (los resultados se re-guardan al volver a analizar).
+    const files: Record<SlotKey, File | null> = {
+      padre: slots.padre.file, child: slots.child.file, madre: slots.madre.file,
+    };
+    files[key] = file;
+    const toPersist: Partial<Record<SlotKey, RestoredSlot>> = {};
+    (['padre', 'child', 'madre'] as const).forEach((k) => { if (files[k]) toPersist[k] = { file: files[k]! }; });
+    void savePrimariaState(toPersist, {});
+  };
+
+  // Limpiar todo: borra fotos, veredicto y el guardado local.
+  const handleClear = () => {
+    setSlots((prev) => {
+      (['padre', 'child', 'madre'] as const).forEach((k) => {
+        if (prev[k].previewUrl) URL.revokeObjectURL(prev[k].previewUrl);
+      });
+      return { padre: { ...EMPTY_SLOT }, child: { ...EMPTY_SLOT }, madre: { ...EMPTY_SLOT } };
+    });
+    resetVerdict();
+    regionalRef.current = {};
+    setRestoredRegional({});
+    void clearPrimariaState();
   };
 
   // ---------------------------------------
@@ -163,6 +216,66 @@ export default function AppPrimaria() {
     };
   }, []);
 
+  // Arma el veredicto GLOBAL desde los PipelineOutput (coseno + posterior
+  // calibrado #6). Usado por onAnalyze y por la restauración al montar.
+  const computeGlobalVerdict = async (
+    cr: PipelineOutput, pr: PipelineOutput | null, mr: PipelineOutput | null,
+  ) => {
+    const cosPadre = pr ? cosineSimilarity(cr.embedding, pr.embedding) : undefined;
+    const cosMadre = mr ? cosineSimilarity(cr.embedding, mr.embedding) : undefined;
+    let scorePadre: ValueScore | undefined;
+    let scoreMadre: ValueScore | undefined;
+    try {
+      const cal = await loadCalibration('KinFaceW-I');
+      setCalWarning(calibrationWarning(cal));
+      setCalError(null);
+      if (cosPadre != null) scorePadre = scoreValue(cal, 'cosine', 'ALL', cosPadre);
+      if (cosMadre != null) scoreMadre = scoreValue(cal, 'cosine', 'ALL', cosMadre);
+    } catch (e) {
+      setCalError(e instanceof Error ? e.message : String(e));
+    }
+    setGlobalVerdict(buildGlobalVerdict(cosPadre, cosMadre, scorePadre, scoreMadre));
+  };
+
+  // Restaurar estado persistido al montar (lib/primariaStore). Restaura fotos +
+  // resultados; rearma el veredicto global (de embeddings, sin inferencia). El
+  // panel rehace el regional GEOMÉTRICO de los landmarks (tampoco infiere).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const restored = await loadPrimariaState();
+      if (!restored || cancelled) return;
+      const next: Record<SlotKey, SlotState> = {
+        padre: { ...EMPTY_SLOT }, child: { ...EMPTY_SLOT }, madre: { ...EMPTY_SLOT },
+      };
+      (['padre', 'child', 'madre'] as const).forEach((k) => {
+        const r = restored.slots[k];
+        if (r) next[k] = {
+          file: r.file, previewUrl: URL.createObjectURL(r.file),
+          result: r.result ?? null, error: null, isDraggingOver: false,
+        };
+      });
+      if (cancelled) return;
+      // Sembrar la cache regional ANTES de montar el panel (mismo batch que setSlots).
+      regionalRef.current = restored.regional;
+      setRestoredRegional(restored.regional);
+      setSlots(next);
+      if (next.child.result && (next.padre.result || next.madre.result)) {
+        await computeGlobalVerdict(next.child.result, next.padre.result, next.madre.result);
+        // Init de la sesión ONNX en BACKGROUND (solo onnx, sin landmarker ni
+        // inferencia) para habilitar la solapa Occlusion tras la recarga. No
+        // bloquea el display (global + geométrico no la necesitan) ni calienta
+        // (crear la sesión no infiere). Si Analizar ya creó una, se descarta esta.
+        void initOnnxSession().then((s) => {
+          if (cancelled || sessionRef.current) { void s.release().catch(() => {}); return; }
+          sessionRef.current = s;
+          setSession(s);
+        }).catch((e) => console.warn('[AppPrimaria] init ONNX en background falló:', e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const ensureInit = async () => {
     if (landmarkerRef.current && sessionRef.current) return;
     setInitStatus('initializing');
@@ -196,12 +309,14 @@ export default function AppPrimaria() {
   // Analizar: corre el pipeline de los slots cargados, calcula los cosines
   // Hijo↔Padre / Hijo↔Madre, los califica (posterior calibrado, relación 'ALL'
   // porque no se conoce el sexo del Hijo/a) y arma el veredicto GLOBAL. El
-  // regional llega solo cuando el panel auto-computa y emite onResults.
+  // regional lo arma el panel solo (auto-computa geométrico).
   // ---------------------------------------
   const onAnalyze = async () => {
     if (!canAnalyze) return;
     setRunning(true);
     resetVerdict();
+    regionalRef.current = {}; // nuevo análisis → los scores regionales previos no valen
+    setRestoredRegional({});  // y la siembra restaurada
     try {
       await ensureInit();
       const outChild = await processSlot('child');
@@ -211,24 +326,15 @@ export default function AppPrimaria() {
         setGlobalError('No se pudo procesar la cara del Hijo/a.');
         return;
       }
-      const cosPadre = outPadre ? cosineSimilarity(outChild.embedding, outPadre.embedding) : undefined;
-      const cosMadre = outMadre ? cosineSimilarity(outChild.embedding, outMadre.embedding) : undefined;
+      await computeGlobalVerdict(outChild, outPadre, outMadre);
 
-      // Calibración (Tarea #6): cosine → posterior P(parentesco). Si falla la
-      // carga, el veredicto sigue mostrando los cosines crudos.
-      let scorePadre: ValueScore | undefined;
-      let scoreMadre: ValueScore | undefined;
-      try {
-        const cal = await loadCalibration('KinFaceW-I');
-        setCalWarning(calibrationWarning(cal));
-        setCalError(null);
-        if (cosPadre != null) scorePadre = scoreValue(cal, 'cosine', 'ALL', cosPadre);
-        if (cosMadre != null) scoreMadre = scoreValue(cal, 'cosine', 'ALL', cosMadre);
-      } catch (e) {
-        setCalError(e instanceof Error ? e.message : String(e));
-      }
-
-      setGlobalVerdict(buildGlobalVerdict(cosPadre, cosMadre, scorePadre, scoreMadre));
+      // Persistir el estado COMPLETO (fotos + resultados) para sobrevivir recargas.
+      const toPersist: Partial<Record<SlotKey, RestoredSlot>> = {
+        child: { file: slots.child.file!, result: outChild },
+      };
+      if (slots.padre.file) toPersist.padre = { file: slots.padre.file, result: outPadre ?? undefined };
+      if (slots.madre.file) toPersist.madre = { file: slots.madre.file, result: outMadre ?? undefined };
+      void savePrimariaState(toPersist, regionalRef.current);
     } catch (e: unknown) {
       setGlobalError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -239,30 +345,19 @@ export default function AppPrimaria() {
   // Necesita el Hijo/a + al menos un progenitor.
   const canAnalyze = !!slots.child.file && (!!slots.padre.file || !!slots.madre.file) && !running;
 
-  // Resultados listos para el panel/veredicto.
   const childResult = slots.child.result;
   const padreResult = slots.padre.result;
   const madreResult = slots.madre.result;
-
-  // onResults estable: arma el veredicto regional desde los scores del panel.
-  const onRegionalResults = useCallback(
-    (method: RegionalMethod, bySide: Partial<Record<Side, RegionalScoresResult>>) => {
-      const scorer = getScorer(method);
-      setRegionalVerdict(
-        buildRegionalVerdict(bySide, {
-          method,
-          methodLabel: scorer?.label ?? method,
-          confidence: scorer?.baseConfidence ?? 'experimental',
-        }),
-      );
-    },
-    [],
-  );
 
   const panelParents: RegionalPanelParent[] = [
     padreResult ? { side: SLOT_TO_SIDE.padre, label: 'Padre', result: padreResult } : null,
     madreResult ? { side: SLOT_TO_SIDE.madre, label: 'Madre', result: madreResult } : null,
   ].filter(Boolean) as RegionalPanelParent[];
+
+  // Color del borde del recuadro principal: tinte del ganador global (si hay).
+  const boxBorder = globalVerdict && globalVerdict.winner !== 'tie' && globalVerdict.cosine.left != null && globalVerdict.cosine.right != null
+    ? SIDE_COLOR[globalVerdict.winner]
+    : '#ccc';
 
   return (
     <div style={{ fontFamily: 'monospace', padding: 20, maxWidth: 1100, margin: '0 auto' }}>
@@ -277,62 +372,82 @@ export default function AppPrimaria() {
         <strong> región</strong> (qué heredó de cada uno).
       </p>
 
-      {/* Tres slots: Padre · Hijo/a · Madre */}
-      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
-        {(['padre', 'child', 'madre'] as const).map((key) => (
-          <FaceSlot
-            key={key}
-            meta={SLOT_META[key]}
-            slot={slots[key]}
-            onPick={(f) => onPickFile(key, f)}
-            onDragOver={onDragOver(key)}
-            onDragLeave={onDragLeave(key)}
-            onDrop={onDrop(key)}
-          />
-        ))}
-      </div>
+      {/* RECUADRO 1: fotos originales (arriba) + veredicto global (debajo) */}
+      <div style={{ border: `2px solid ${boxBorder}`, borderRadius: 12, padding: 16, marginTop: 12, background: '#fcfcff' }}>
+        {/* Bloque de guardado local + limpiar, arriba a la derecha */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: '#999' }} title="IndexedDB en este equipo; las imágenes no se suben a ningún lado">
+              💾 guardado localmente en este equipo
+            </div>
+            {(slots.padre.file || slots.child.file || slots.madre.file) && (
+              <button
+                onClick={handleClear}
+                title="Borra las fotos, el veredicto y el guardado local"
+                style={{
+                  marginTop: 4, fontFamily: 'monospace', fontSize: 12, cursor: 'pointer',
+                  background: '#fff', color: '#900', border: '1px solid #c99', borderRadius: 6, padding: '4px 10px',
+                }}
+              >
+                🗑️ Limpiar informe completo
+              </button>
+            )}
+          </div>
+        </div>
 
-      {/* Botón analizar */}
-      <div style={{ marginTop: 18 }}>
-        <button
-          onClick={() => void onAnalyze()}
-          disabled={!canAnalyze}
-          style={{
-            padding: '12px 28px', fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
-            cursor: canAnalyze ? 'pointer' : 'not-allowed',
-            background: canAnalyze ? '#7c3aed' : '#ccc', color: '#fff',
-            border: 'none', borderRadius: 6,
-          }}
-        >
-          {running
-            ? (initStatus === 'initializing' ? 'Inicializando modelos…' : 'Analizando…')
-            : 'Analizar parecido'}
-        </button>
-        {!canAnalyze && !running && (
-          <span style={{ marginLeft: 12, color: '#999', fontSize: 12 }}>
-            Cargá el Hijo/a + al menos un progenitor.
-          </span>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {(['padre', 'child', 'madre'] as const).map((key) => (
+            <FaceSlot
+              key={key}
+              meta={SLOT_META[key]}
+              slot={slots[key]}
+              onPick={(f) => onPickFile(key, f)}
+              onDragOver={onDragOver(key)}
+              onDragLeave={onDragLeave(key)}
+              onDrop={onDrop(key)}
+            />
+          ))}
+        </div>
+
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => void onAnalyze()}
+            disabled={!canAnalyze}
+            style={{
+              padding: '12px 28px', fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
+              cursor: canAnalyze ? 'pointer' : 'not-allowed',
+              background: canAnalyze ? '#7c3aed' : '#ccc', color: '#fff',
+              border: 'none', borderRadius: 6,
+            }}
+          >
+            {running
+              ? (initStatus === 'initializing' ? 'Inicializando modelos…' : 'Analizando…')
+              : 'Analizar parecido'}
+          </button>
+          {!canAnalyze && !running && (
+            <span style={{ color: '#999', fontSize: 12 }}>
+              Cargá el Hijo/a + al menos un progenitor.
+            </span>
+          )}
+        </div>
+
+        {globalError && (
+          <div style={{ background: '#fee', color: '#900', padding: 12, borderRadius: 4, marginTop: 12 }}>
+            <strong>Error:</strong> {globalError}
+          </div>
+        )}
+
+        {/* Veredicto GLOBAL, debajo de las fotos, en el mismo recuadro */}
+        {globalVerdict && (
+          <GlobalVerdictView
+            global={globalVerdict}
+            hasCalibration={!calError}
+            calWarning={calWarning}
+          />
         )}
       </div>
 
-      {globalError && (
-        <div style={{ background: '#fee', color: '#900', padding: 12, borderRadius: 4, marginTop: 12 }}>
-          <strong>Error:</strong> {globalError}
-        </div>
-      )}
-
-      {/* VEREDICTO */}
-      {globalVerdict && (
-        <VerdictPanel
-          global={globalVerdict}
-          regional={regionalVerdict}
-          hasCalibration={!calError}
-          calWarning={calWarning}
-        />
-      )}
-
-      {/* Desglose visual reutilizando el panel de scores por región (#30).
-          Auto-computa geométrico y emite onResults → alimenta el veredicto. */}
+      {/* RECUADRO 2: scores por región (incluye la herencia por región + solapas de método) */}
       {childResult && (padreResult || madreResult) && (
         <RegionalScoresPanel
           child={childResult}
@@ -340,7 +455,10 @@ export default function AppPrimaria() {
           session={session}
           busy={running}
           autoCompute="geometric"
+          methodSelector="tabs"
+          showInheritance
           onResults={onRegionalResults}
+          seedResults={restoredRegional}
         />
       )}
     </div>
@@ -348,11 +466,10 @@ export default function AppPrimaria() {
 }
 
 // =========================================================
-// Veredicto: lectura directa global + regional.
+// Veredicto GLOBAL: cara completa (coseno + posterior calibrado por lado).
 // =========================================================
-function VerdictPanel({ global, regional, hasCalibration, calWarning }: {
+function GlobalVerdictView({ global, hasCalibration, calWarning }: {
   global: GlobalVerdict;
-  regional: RegionalVerdict | null;
   hasCalibration: boolean;
   calWarning: string | null;
 }) {
@@ -370,23 +487,19 @@ function VerdictPanel({ global, regional, hasCalibration, calWarning }: {
   })();
 
   const pct = (x: number | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+  const headlineColor = both && global.winner !== 'tie' ? SIDE_COLOR[global.winner] : '#333';
 
   return (
-    <div style={{
-      border: `2px solid ${both && global.winner !== 'tie' ? SIDE_COLOR[global.winner] : '#999'}`,
-      borderRadius: 12, padding: 18, marginTop: 20, background: '#fcfcff',
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{headline}</div>
-      <div style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>
-        Veredicto global por cara completa (coseno de embeddings){hasCalibration ? ' + probabilidad calibrada de parentesco (KinFaceW-I)' : ''}.
+    <div style={{ borderTop: '1px solid #e5e5e5', marginTop: 16, paddingTop: 14 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: headlineColor }}>{headline}</div>
+      <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
+        Parecido global por cara completa (coseno de embeddings){hasCalibration ? ' + probabilidad calibrada de parentesco (KinFaceW-I)' : ''}.
       </div>
 
-      {/* Filas global por lado: cosine + posterior + barra */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {present.map((s) => {
           const cos = global.cosine[s];
           const post = global.posterior[s];
-          const isWinner = both && global.winner === s;
           return (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
               <span style={{ width: 64, fontWeight: 700, color: SIDE_COLOR[s] }}>{SIDE_LABEL[s]}</span>
@@ -400,7 +513,7 @@ function VerdictPanel({ global, regional, hasCalibration, calWarning }: {
               <span style={{ width: 92, color: '#333' }}>cos {cos != null ? cos.toFixed(4) : '—'}</span>
               {hasCalibration && (
                 <span style={{ width: 130, color: '#555' }}>
-                  parentesco {pct(post)}{isWinner ? '' : ''}
+                  parentesco {pct(post)}
                   {global.isKin[s] != null && (
                     <span style={{ color: global.isKin[s] ? '#16a34a' : '#b45309', marginLeft: 6 }}>
                       {global.isKin[s] ? '✓' : '·'}
@@ -413,27 +526,6 @@ function VerdictPanel({ global, regional, hasCalibration, calWarning }: {
         })}
       </div>
 
-      {/* Desglose regional: qué heredó de cada uno */}
-      <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>¿Por qué? — herencia por región</div>
-        {!regional ? (
-          <div style={{ color: '#999', fontSize: 13 }}>Analizando regiones…</div>
-        ) : (
-          <>
-            <InheritedRow label="Padre" color={PADRE_COLOR} groups={regional.inheritedLeft.map((g) => g.label)} />
-            <InheritedRow label="Madre" color={MADRE_COLOR} groups={regional.inheritedRight.map((g) => g.label)} />
-            {regional.balanced.length > 0 && (
-              <InheritedRow label="Equilibrado" color="#888" groups={regional.balanced.map((g) => g.label)} />
-            )}
-            <div style={{ fontSize: 11, color: '#999', marginTop: 8 }}>
-              Según <strong>{regional.methodLabel}</strong> (confiabilidad {regional.confidence}).
-              El reparto por región se muestra abajo (radar / heatmap / barras); cambiá el método ahí
-              para recalcular el veredicto.
-            </div>
-          </>
-        )}
-      </div>
-
       {calWarning && (
         <div style={{ marginTop: 12, fontSize: 11, color: '#b45309', background: '#fff7ed', padding: 8, borderRadius: 4 }}>
           ⚠ {calWarning}
@@ -443,21 +535,10 @@ function VerdictPanel({ global, regional, hasCalibration, calWarning }: {
   );
 }
 
-function InheritedRow({ label, color, groups }: { label: string; color: string; groups: string[] }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, fontSize: 13, marginBottom: 4, alignItems: 'baseline' }}>
-      <span style={{ width: 96, fontWeight: 700, color }}>Heredó de {label}:</span>
-      <span style={{ color: '#333' }}>
-        {groups.length > 0 ? groups.join(', ') : <span style={{ color: '#bbb' }}>—</span>}
-      </span>
-    </div>
-  );
-}
-
 // =========================================================
-// Slot de carga (drag-drop + file). Sin roles ni vínculo: la App primaria tiene
-// roles fijos (Padre · Hijo/a · Madre). El preview de la cara alineada vive en el
-// panel de abajo, así que acá solo mostramos la foto original.
+// Slot de carga (drag-drop + file). Roles fijos (Padre · Hijo/a · Madre); sin
+// vínculo. El preview de la cara alineada vive en el panel de abajo, así que acá
+// sólo mostramos la foto original.
 // =========================================================
 function FaceSlot({ meta, slot, onPick, onDragOver, onDragLeave, onDrop }: {
   meta: { label: string; color: string; hint: string };
@@ -480,7 +561,7 @@ function FaceSlot({ meta, slot, onPick, onDragOver, onDragLeave, onDrop }: {
       onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
       style={{
         flex: 1, minWidth: 240, border: `1px solid #ccc`, borderTop: `4px solid ${meta.color}`,
-        borderRadius: 6, padding: 12, background: '#fafafa',
+        borderRadius: 6, padding: 12, background: '#fff',
         transition: 'background 80ms, border-color 80ms', ...dragStyle,
       }}
     >
@@ -490,7 +571,7 @@ function FaceSlot({ meta, slot, onPick, onDragOver, onDragLeave, onDrop }: {
       {!slot.previewUrl && (
         <div style={{
           border: '2px dashed #bbb', borderRadius: 4, padding: '24px 12px', textAlign: 'center',
-          fontSize: 12, color: '#777', marginBottom: 8, background: slot.isDraggingOver ? '#dceaff' : '#fff',
+          fontSize: 12, color: '#777', marginBottom: 8, background: slot.isDraggingOver ? '#dceaff' : '#fafafa',
         }}>
           arrastrá una imagen acá<br />
           <span style={{ fontSize: 10, color: '#999' }}>o usá el botón ↓</span>
