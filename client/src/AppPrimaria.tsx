@@ -1,10 +1,14 @@
 // =========================================
 // ID: PHYLOFACE_APP_PRIMARIA
-// VERSION: v1.2
+// VERSION: v1.3
 // =========================================
 // App primaria — "¿A quién se parece?" (Tarea #12, el objetivo final del proyecto,
 // ver ARQUITECTURA.md §2.1). Superficie-producto niño-céntrica: tres fotos (Padre ·
 // Hijo/a · Madre) → un VEREDICTO interpretable + el desglose visual por región.
+//
+// Cambio v1.2 → v1.3 (#31): botón "📄 Descargar PDF" en el veredicto → genera el
+// informe (caras + global + herencia por región del método mostrado) con jsPDF,
+// 100% client-side (lib/pdfReport). Las imágenes nunca salen del browser.
 //
 // Cambio v1.1 → v1.2 (persistencia local pedida por el usuario): el estado se
 // guarda en IndexedDB LOCAL (lib/primariaStore) — fotos + PipelineOutput por slot.
@@ -42,12 +46,13 @@ import {
   loadCalibration, scoreValue, calibrationWarning,
   type ValueScore,
 } from './lib/calibration';
-import { buildGlobalVerdict, type GlobalVerdict, type Side } from './lib/verdict';
+import { buildGlobalVerdict, buildRegionalVerdict, type GlobalVerdict, type Side } from './lib/verdict';
 import {
   savePrimariaState, loadPrimariaState, clearPrimariaState,
   type RestoredSlot, type RegionalCache,
 } from './lib/primariaStore';
-import type { RegionalMethod, RegionalScoresResult } from './lib/regionalScores';
+import { getScorer, type RegionalMethod, type RegionalScoresResult } from './lib/regionalScores';
+import { generateReportPdf } from './lib/pdfReport';
 import RegionalScoresPanel, { type RegionalPanelParent } from './RegionalScoresPanel';
 
 // Colores coherentes con RegionalScoresPanel (Padre=izquierda azul, Madre=derecha verde).
@@ -107,6 +112,9 @@ export default function AppPrimaria() {
   const regionalRef = useRef<RegionalCache>({});
   const slotsRef = useRef(slots);
   useEffect(() => { slotsRef.current = slots; });
+  // Método actualmente mostrado por el panel (último que emitió scores): el PDF usa
+  // ese para la herencia por región, así coincide con lo que ve el usuario.
+  const [lastMethod, setLastMethod] = useState<RegionalMethod>('geometric');
 
   // ---------------------------------------
   // Manejo de slots.
@@ -135,10 +143,44 @@ export default function AppPrimaria() {
   const onRegionalResults = useCallback(
     (method: RegionalMethod, bySide: Partial<Record<Side, RegionalScoresResult>>) => {
       regionalRef.current = { ...regionalRef.current, [method]: bySide };
+      setLastMethod(method);
       persistAll();
     },
     [persistAll],
   );
+
+  // Cara alineada (ImageData 112×112) → dataURL PNG, para incrustar en el PDF.
+  const alignedToDataUrl = (result: PipelineOutput): string => {
+    const c = document.createElement('canvas');
+    c.width = result.aligned.width; c.height = result.aligned.height;
+    c.getContext('2d')!.putImageData(result.aligned, 0, 0);
+    return c.toDataURL('image/png');
+  };
+
+  // Descarga el informe en PDF (client-side; las imágenes no salen del browser).
+  const handleDownloadPdf = () => {
+    const cr = slots.child.result;
+    if (!globalVerdict || !cr) return;
+    const bySide = regionalRef.current[lastMethod];
+    const scorer = getScorer(lastMethod);
+    const regional = bySide
+      ? buildRegionalVerdict(bySide, {
+          method: lastMethod,
+          methodLabel: scorer?.label ?? lastMethod,
+          confidence: scorer?.baseConfidence ?? 'experimental',
+        })
+      : null;
+    generateReportPdf({
+      faces: {
+        padre: slots.padre.result ? { label: 'Padre', dataUrl: alignedToDataUrl(slots.padre.result) } : undefined,
+        child: { label: 'Hijo/a', dataUrl: alignedToDataUrl(cr) },
+        madre: slots.madre.result ? { label: 'Madre', dataUrl: alignedToDataUrl(slots.madre.result) } : undefined,
+      },
+      global: globalVerdict,
+      regional,
+      parentLabels: { left: 'Padre', right: 'Madre' },
+    });
+  };
 
   const onPickFile = (key: SlotKey, file: File | null) => {
     setSlots((prev) => {
@@ -443,6 +485,7 @@ export default function AppPrimaria() {
             global={globalVerdict}
             hasCalibration={!calError}
             calWarning={calWarning}
+            onDownloadPdf={handleDownloadPdf}
           />
         )}
       </div>
@@ -468,10 +511,11 @@ export default function AppPrimaria() {
 // =========================================================
 // Veredicto GLOBAL: cara completa (coseno + posterior calibrado por lado).
 // =========================================================
-function GlobalVerdictView({ global, hasCalibration, calWarning }: {
+function GlobalVerdictView({ global, hasCalibration, calWarning, onDownloadPdf }: {
   global: GlobalVerdict;
   hasCalibration: boolean;
   calWarning: string | null;
+  onDownloadPdf?: () => void;
 }) {
   const sides: Side[] = ['left', 'right'];
   const present = sides.filter((s) => global.cosine[s] != null);
@@ -491,7 +535,22 @@ function GlobalVerdictView({ global, hasCalibration, calWarning }: {
 
   return (
     <div style={{ borderTop: '1px solid #e5e5e5', marginTop: 16, paddingTop: 14 }}>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: headlineColor }}>{headline}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: headlineColor, flex: 1 }}>{headline}</div>
+        {onDownloadPdf && (
+          <button
+            onClick={onDownloadPdf}
+            title="Descargar el informe en PDF (se genera en tu navegador; las imágenes no se suben)"
+            style={{
+              flexShrink: 0, fontFamily: 'monospace', fontSize: 13, cursor: 'pointer',
+              background: '#fff', color: '#7c3aed', border: '1px solid #c4b5fd',
+              borderRadius: 6, padding: '6px 12px', fontWeight: 700,
+            }}
+          >
+            📄 Descargar PDF
+          </button>
+        )}
+      </div>
       <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
         Parecido global por cara completa (coseno de embeddings){hasCalibration ? ' + probabilidad calibrada de parentesco (KinFaceW-I)' : ''}.
       </div>
