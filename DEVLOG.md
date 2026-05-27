@@ -9,6 +9,48 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-05-27
+
+### `ba98bde` · [claude] App primaria #12 — página "¿A quién se parece?" + veredicto interpretable `T12✓` `T31↑` `T32↑` `T30` `T6`
+
+Implementa la **App primaria** (Tarea #12, objetivo final del proyecto, `ARQUITECTURA.md`
+§2.1) como superficie-producto dedicada, **reusando el motor existente** (no reimplementa
+nada del pipeline). Diagnóstico previo: los bloques técnicos de #12 ya estaban construidos y
+repartidos en Comparator + RegionalScoresPanel (#30) + CalibrationModal (#6); el gap real era
+*producto* (una superficie cohesiva niño-céntrica) + una *capa de síntesis* (el veredicto), no
+ingeniería. Decidido con el usuario: página dedicada + veredicto (vs. cerrar como ya-cubierto).
+
+- **`client/src/lib/regionalAggregate.ts`** (nuevo): helpers PUROS de reparto P↔M y colapso a
+  8 grupos, **extraídos** de `RegionalScoresPanel`. Motivo: el veredicto debe derivar de la
+  MISMA cuenta que dibujan las barras/radar — un resumen que pueda divergir de su gráfico
+  termina mintiendo. Una sola fuente de verdad.
+- **`client/src/lib/verdict.ts`** (nuevo, puro): síntesis global (quién gana por coseno +
+  posterior calibrado) y regional (qué grupo facial hereda de cada progenitor, con umbral de
+  empate `REGIONAL_TIE_EPS=0.06` → "Equilibrado").
+- **`client/src/RegionalScoresPanel.tsx`** (v1.2→v1.3): refactor **aditivo** — importa los
+  helpers extraídos + 2 props OPCIONALES (`autoCompute` para correr geométrico sin click,
+  `onResults` para emitir los scores al padre). El Comparador no las pasa → comportamiento
+  idéntico (verificado: sin referencias colgantes a `CANONICAL_REGIONS`).
+- **`client/src/AppPrimaria.tsx`** (nuevo): página niño-céntrica con 3 slots fijos
+  (Padre·Hijo/a·Madre). Pipeline e2e de `lib/pipeline`; calibración de `lib/calibration`
+  (relación 'ALL'); `RegionalScoresPanel` abajo (auto-computa geométrico → `onResults` →
+  veredicto regional sincronizado; occlusion opt-in). Imágenes 100% client-side, sin
+  persistencia. Sesión ONNX espejada a estado (no se lee el ref en render).
+- **`client/src/App.tsx`** (v1.4→v1.5): pestaña "App primaria" como **primera y por defecto**.
+- **`client/scripts/app-primaria-smoke.mjs`** (nuevo): smoke headless versionable.
+
+El recuadro del veredicto combina **dos motores**: arriba el embedding global ArcFace (coseno
++ posterior #6); abajo la **geometría 2D por región** (bbox: centroide/ancho/alto sobre la cara
+alineada → reparto P↔M). Son señales distintas y pueden discrepar (por diseño).
+
+Verificado: `tsc -b` OK, `vite build` OK, archivos nuevos lint-clean (los 2 errores de lint
+restantes son preexistentes de reglas react-hooks que `main` ya violaba). **Smoke headless
+PASS**: veredicto global "Se parece más a Padre" + regional + radar; screenshots validados
+(`/tmp/primaria-*.png`). Recursos (`dev-monitored.sh`): baseline ~49°C/15% → pico **95°C/93%**
+~50s → vuelta ~56°C; el pico es la inferencia ONNX en WASM (fallback headless), no el feature
+(geométrico no infiere). En browser real con WebGPU la inferencia iría a GPU, más fría.
+Follow-ups: ajustes de apariencia, #31 (PDF client-side), #32 (compartir vía servidor).
+
 ## 2026-05-26
 
 ### `aabc54a` · [codex] Arranca ingesta vitrina Mundial 2026 `T13` `T14` `T15`

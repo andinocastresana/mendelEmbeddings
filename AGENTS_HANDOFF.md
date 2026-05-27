@@ -50,6 +50,29 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-27 · [claude] · App primaria #12 (v1) commiteada+pusheada — sigue apariencia + PDF + compartir
+
+- **Rama / commits**: `main`. `ba98bde` (código, 7 archivos) + el commit de docs de esta
+  tanda (DEVLOG/TAREAS/este handoff). Pusheados a `origin/main`.
+- **Hice**: cerré **#12** (App primaria, objetivo final del proyecto). Diagnóstico clave: los
+  bloques técnicos ya existían repartidos en Comparator + panel regional (#30) + calibración
+  (#6); el gap era *producto* + *síntesis*, no motor. Construí una **pestaña dedicada "App
+  primaria"** (ahora default) con 3 slots (Padre·Hijo/a·Madre) y un **veredicto**: global
+  (coseno + posterior #6) + herencia por región (reparto P↔M). Nuevos `lib/regionalAggregate`
+  (helpers extraídos del panel = 1 fuente de verdad), `lib/verdict` (síntesis pura),
+  `AppPrimaria.tsx`. El panel (#30) ganó 2 props opcionales (`autoCompute`/`onResults`); el
+  Comparador NO las pasa → intacto. Smoke headless nuevo en `client/scripts/app-primaria-smoke.mjs`.
+- **Abierto / handoff**: el usuario quiere seguir con (1) **ajustes de apariencia** de la App
+  primaria, (2) **#31 descarga de informe en PDF** (client-side, sin subir imágenes), (3)
+  **#32 compartir vía servidor** — este es el **primer eje server-side** de la app (Track 2b):
+  antes de codear hay que definir QUÉ se sube (¿imágenes? ¿solo el render/scores?),
+  consentimiento, retención y privacidad. Ver decisiones diferidas W2/W3/W4/W6/W8 en
+  `ARQUITECTURA §5.3` y el episodio de arquitectura híbrida cliente-pesado/servidor-fino.
+- **Ojo con**: el veredicto combina DOS motores (global = embedding ArcFace; regional =
+  geometría 2D por región) → pueden discrepar, es por diseño. El smoke geométrico corre
+  headless; occlusion sigue siendo HEADED-only (ORT cae a WASM y bloquea). El pico de 95°C del
+  smoke es la inferencia ONNX en WASM, no el feature.
+
 ## 2026-05-26 · [codex] · Arranque vitrina 2026: fuentes + manifiesto Wikimedia
 
 - **Rama / commits**: `main`, sin commits.
