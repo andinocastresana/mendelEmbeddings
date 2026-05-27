@@ -50,6 +50,54 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-27 · [claude] · App primaria #12 — MVP cliente cerrado (UX + persistencia + progreso) commiteado+pusheado
+
+- **Rama / commits**: `main`. `8954f9c` (código, 7 archivos client) + el commit de
+  docs de esta tanda (DEVLOG/ARQUITECTURA/este handoff). Pusheados a `origin/main`.
+  (Antes, misma jornada: `ba98bde` = App primaria v1.)
+- **Hice**: ajustes de apariencia + **persistencia local** (IndexedDB
+  `phyloface-primaria`, `lib/primariaStore`) + **progreso real de occlusion**. Con
+  esto el usuario considera cerrado el **MVP del lado cliente** de la App primaria.
+  UX: recuadro 1 = fotos + veredicto global; herencia por región dentro del panel
+  con **solapas** de método; botón Calcular solo si hace falta; "🗑️ Limpiar informe
+  completo" arriba a la derecha. Persistencia: fotos + PipelineOutput + scores
+  regionales (geométrico Y occlusion) → recarga restaura todo sin re-inferir
+  (occlusion se re-siembra vía nueva prop `seedResults` del panel).
+- **Abierto / handoff**: quedan **#31 (informe PDF client-side)** y **#32 (compartir
+  vía servidor — primer eje server-side / Track 2b: definir QUÉ se sube, consentimiento,
+  retención antes de codear)**. No son MVP.
+- **Ojo con**: NO toqué tu trabajo de vitrina sin commitear
+  (`_meta/VITRINA_EQUIPOS_FUENTES.md`, `scripts/build_transfermarkt_headshot_manifest.py`)
+  — commiteé solo mis archivos client con paths explícitos. El cálculo de occlusion
+  no es testeable headless (>5 min en WASM); su persistencia se valida por inyección
+  en IDB + recarga (`app-primaria-occlusion-persist-smoke.mjs`), el cálculo real headed.
+  El panel `RegionalScoresPanel` ahora lo usan App primaria (tabs+seed+inheritance) y
+  Comparador (radios, sin esas props) — los cambios son aditivos, el Comparador quedó igual.
+
+## 2026-05-27 · [codex] · Vitrina 2026: retratos estandarizados Transfermarkt
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: por pedido del usuario cambié el criterio de ingesta para la vitrina:
+  primero fotos estandarizadas para comparar, licencia después. Agregué
+  `scripts/build_transfermarkt_headshot_manifest.py`, que toma el manifiesto
+  `all_max8`, busca retratos de perfil en Transfermarkt, desambigua por nombre,
+  nacionalidad, imagen real y variantes apellido/nombre, y marca todo como
+  `UNREVIEWED_NONPUBLIC_RESEARCH`. Actualicé `_meta/VITRINA_EQUIPOS_FUENTES.md`
+  con la nueva prioridad.
+- **Resultado**: generado lote gitignored
+  `data/output/teams/manifest_transfermarkt_northamerica2026_headshots.json` y
+  descargas en `data/input/img/teams_players/northamerica2026_transfermarkt/`.
+  Cobertura final: **259/271** retratos con archivo local. Faltan 12 matches
+  confiables; varios son alias/nombres no exactos (p.ej. Andy/Andrew Robertson) o
+  jugadores con baja cobertura. El manifiesto conserva candidatos y `best_score`.
+- **Abierto / handoff**: siguiente paso natural = QC facial sobre los 259
+  retratos: una cara detectable, bbox suficiente, pose razonable, score alto,
+  y generar un manifiesto `accepted/rejected` para embeddings de vitrina. Si se
+  busca 100% cobertura, resolver overrides manuales antes del QC.
+- **Ojo con**: estas fotos NO son publicables todavía; son dataset local de trabajo
+  para comparación. No tocar los cambios locales de App primaria que ya estaban
+  en el worktree (`client/src/AppPrimaria.tsx`, `RegionalScoresPanel.tsx`, etc.).
+
 ## 2026-05-27 · [claude] · App primaria #12 (v1) commiteada+pusheada — sigue apariencia + PDF + compartir
 
 - **Rama / commits**: `main`. `ba98bde` (código, 7 archivos) + el commit de docs de esta

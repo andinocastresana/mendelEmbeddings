@@ -65,10 +65,11 @@ Combinación score global + scores regionales con pesos diferenciados (ojos / pe
 
 ## 2. Aplicaciones
 
-### 2.1 App primaria — Parecido niño ↔ progenitores ⏳
+### 2.1 App primaria — Parecido niño ↔ progenitores ✅ *(MVP cliente, Tarea #12)*
 - Input: foto del niño + foto del padre + foto de la madre.
-- Output: score global × 2, scores por región × 2, visualización con overlay + radar/spider, heatmap de contribución.
-- **Objetivo final del proyecto.**
+- Output: score global × 2 (coseno + posterior calibrado #6), scores por región × 2 (reparto P↔M), **veredicto interpretable** (global "se parece más a X" + herencia por región), visualización con overlay + radar + heatmap.
+- **Objetivo final del proyecto.** MVP cliente cerrado 2026-05-27: pestaña dedicada "App primaria" (default), reusa el motor (`lib/pipeline`), la calibración (#6) y el panel de scores regionales (#30). Persistencia local en IndexedDB (`lib/primariaStore`), 100% client-side. Commits `ba98bde` + `8954f9c`.
+- Pendiente (no-MVP): #31 descarga de informe en PDF (client-side), #32 compartir vía servidor (primer eje server-side / Track 2b).
 
 ### 2.2 App secundaria — Comparación pareada dentro de un grupo ✅
 `run_pairwise_heatmap.py` + `MultiFaceComparator`. Heatmap N×M operativo.

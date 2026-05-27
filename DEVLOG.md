@@ -11,6 +11,45 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-27
 
+### `8954f9c` · [claude] App primaria #12 — ajustes de UX + persistencia local + progreso occlusion (MVP cliente) `T12` `T30`
+
+Refinamientos de la App primaria pedidos por el usuario tras revisar la v1; con
+esto se considera cerrado el **MVP del lado cliente**. Todo 100% local (las
+imágenes nunca salen del browser).
+
+- **Apariencia**: el **recuadro 1** unifica las 3 fotos originales + el veredicto
+  GLOBAL (coseno + posterior calibrado #6) debajo. La **herencia por región** se
+  mudó al recuadro "Scores por región" (`RegionalScoresPanel` prop
+  `showInheritance`), y los dos métodos pasaron a **solapas** (`methodSelector="tabs"`:
+  Geométrico | Occlusion); la escala sigue con radios. El botón **"Calcular" sólo
+  aparece cuando hay que computar** (método sin datos); se eliminó "Recalcular"
+  (cambio general, también afecta al Comparador). Bloque de guardado +
+  **"🗑️ Limpiar informe completo"** arriba a la derecha.
+- **Persistencia local** (`client/src/lib/primariaStore.ts`, IndexedDB dedicada
+  `phyloface-primaria`): guarda fotos + `PipelineOutput` por slot + scores
+  regionales (geométrico **y** occlusion). Al recargar restaura fotos + veredicto
+  global (de los embeddings, sin inferencia) + regional (geométrico recomputado de
+  landmarks; occlusion **re-sembrada** sin recomputar). Invalidación por
+  `MODEL_VERSION`. El panel siembra desde la nueva prop `seedResults` **vía effect**
+  (robusto al timing; el init perezoso fallaba porque corría antes de llegar los
+  datos). La solapa Occlusion se habilita si hay sesión **o** datos cacheados (ver
+  cache no necesita sesión); init ONNX en background tras restaurar para rehabilitar
+  el recálculo.
+- **Progreso real de occlusion**: `RegionalScorerContext.onProgress(done,total)`;
+  el `occlusionScorer` lo reporta región a región y el panel dibuja una barra que
+  avanza a través de los progenitores (mejor que un timer estimado).
+- **Bug de "occlusion no se persiste"** diagnosticado: SÍ se guardaba (dump de IDB
+  mostró `["geometric","occlusion"]`); el fallo era de re-siembra/visualización
+  (timing del init perezoso + solapa deshabilitada con datos cacheados). Arreglado.
+
+Versiones: `App.tsx` v1.5, `AppPrimaria.tsx` v1.2, `RegionalScoresPanel.tsx` v1.5.
+Verificado: `tsc -b` OK; archivos propios lint-clean (el panel mantiene avisos
+react-hooks `set-state-in-effect` preexistentes + el del seed effect, misma regla
+tolerada). Smokes nuevos PASS: `app-primaria-persistence-smoke.mjs` (restore
+~300 ms, Limpiar) y `app-primaria-occlusion-persist-smoke.mjs` (inyección en IDB →
+recarga → solapa habilitada + occlusion sin recomputar). El cálculo de occlusion
+headless no es testeable (>5 min en WASM); se valida headed (WebGPU).
+
 ### `ba98bde` · [claude] App primaria #12 — página "¿A quién se parece?" + veredicto interpretable `T12✓` `T31↑` `T32↑` `T30` `T6`
 
 Implementa la **App primaria** (Tarea #12, objetivo final del proyecto, `ARQUITECTURA.md`
