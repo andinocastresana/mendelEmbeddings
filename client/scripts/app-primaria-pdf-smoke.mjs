@@ -33,6 +33,9 @@ try {
   await page.getByRole('button', { name: /analizar parecido/i }).click();
   await page.getByText(/Heredó de Padre/i).waitFor({ timeout: 240000 }); // veredicto + regional listos
 
+  await page.screenshot({ path: '/tmp/primaria-page.png', fullPage: true });
+  console.log('   screenshot de la página → /tmp/primaria-page.png (verifica botón arriba-izquierda)');
+
   console.log('2. click "📄 Descargar PDF" y capturar la descarga');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 30000 }),

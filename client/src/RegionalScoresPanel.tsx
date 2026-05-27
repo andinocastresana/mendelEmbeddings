@@ -1,7 +1,14 @@
 // =========================================
 // ID: PHYLOFACE_COMP_REGIONAL_PANEL
-// VERSION: v1.5
+// VERSION: v1.6
 // =========================================
+// Cambio v1.5 → v1.6 (#31 — PDF fiel): los controles interactivos del panel
+// (solapas/radios de método, radios de escala, toggle de heatmap, botón Calcular)
+// se marcan con `data-pdf-exclude` para que NO entren al PDF de la App primaria
+// (que rasteriza el DOM con html2canvas). Lo informativo —caras, barras, radar,
+// heatmap, herencia, confiabilidad, descripciones— sí se conserva. Es cosmético/
+// aditivo: no cambia el comportamiento en pantalla ni afecta al Comparador.
+//
 // Cambio v1.4 → v1.5 (Tarea #12 — persistencia + progreso): 2 cosas más, ambas
 // aditivas (el Comparador no las usa → queda igual):
 //   - `seedResults`: siembra la cache de scores al montar (App primaria restaurando
@@ -488,7 +495,7 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
   // (recalcular no tiene sentido: las caras de entrada son inmutables; cambiarlas
   // limpia la cache y el botón reaparece).
   const calcButton = (!shown || computing) ? (
-    <button onClick={() => void compute()} disabled={computing || parents.length === 0 || occlusionNoSession || busy}
+    <button data-pdf-exclude="1" onClick={() => void compute()} disabled={computing || parents.length === 0 || occlusionNoSession || busy}
       style={{ marginLeft: 'auto', padding: '5px 14px', borderRadius: 6, cursor: 'pointer' }}>
       {computing ? 'Calculando…' : 'Calcular ▸'}
     </button>
@@ -506,14 +513,14 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
     : null;
 
   const scaleRadios = (
-    <>
+    <span data-pdf-exclude="1">
       <strong>Escala:</strong>
       {radio('rs-scale', scale === 'relative', () => setScale('relative'), 'Reparto P↔M')}
       {radio('rs-scale', scale === 'absolute', () => setScale('absolute'), 'Absoluta')}
-    </>
+    </span>
   );
   const heatmapToggle = (
-    <label style={{ cursor: 'pointer' }}>
+    <label data-pdf-exclude="1" style={{ cursor: 'pointer' }}>
       <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} /> Heatmap sobre el Hijo/a
     </label>
   );
@@ -528,7 +535,7 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
       {methodSelector === 'tabs' ? (
         <>
           {/* Solapas de método (Geométrico | Occlusion) */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid #ddd' }}>
+          <div data-pdf-exclude="1" style={{ display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid #ddd' }}>
             {listScorers().map((s) => {
               const active = method === s.method;
               const cached = resultsByMethod[s.method] != null;
@@ -557,7 +564,7 @@ export default function RegionalScoresPanel({ child, parents, session, busy = fa
       ) : (
         <>
           {/* Controles (radios) — layout del Comparador */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4 }}>
+          <div data-pdf-exclude="1" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4 }}>
             <strong>Método:</strong>
             {listScorers().map((s) => {
               const cached = resultsByMethod[s.method] != null;

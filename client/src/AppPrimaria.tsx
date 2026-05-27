@@ -1,10 +1,18 @@
 // =========================================
 // ID: PHYLOFACE_APP_PRIMARIA
-// VERSION: v1.3
+// VERSION: v1.4
 // =========================================
 // App primaria — "¿A quién se parece?" (Tarea #12, el objetivo final del proyecto,
 // ver ARQUITECTURA.md §2.1). Superficie-producto niño-céntrica: tres fotos (Padre ·
 // Hijo/a · Madre) → un VEREDICTO interpretable + el desglose visual por región.
+//
+// Cambio v1.3 → v1.4 (#31, ajuste pedido por el usuario): el PDF ahora RASTERIZA el
+// DOM real del informe (lib/pdfReport v2.0 con html2canvas) para que coincida con lo
+// que se ve en pantalla (caras, barras, radar, heatmap, herencia), en vez de un
+// layout A4 re-dibujado a mano. Los controles no esenciales para un documento
+// estático se marcan con `data-pdf-exclude` y se omiten. El botón "📄 Descargar PDF"
+// se movió a la esquina SUPERIOR IZQUIERDA del recuadro (espeja al "🗑️ Limpiar" de
+// la derecha). Sigue 100% client-side: las imágenes nunca salen del browser.
 //
 // Cambio v1.2 → v1.3 (#31): botón "📄 Descargar PDF" en el veredicto → genera el
 // informe (caras + global + herencia por región del método mostrado) con jsPDF,
@@ -46,12 +54,12 @@ import {
   loadCalibration, scoreValue, calibrationWarning,
   type ValueScore,
 } from './lib/calibration';
-import { buildGlobalVerdict, buildRegionalVerdict, type GlobalVerdict, type Side } from './lib/verdict';
+import { buildGlobalVerdict, type GlobalVerdict, type Side } from './lib/verdict';
 import {
   savePrimariaState, loadPrimariaState, clearPrimariaState,
   type RestoredSlot, type RegionalCache,
 } from './lib/primariaStore';
-import { getScorer, type RegionalMethod, type RegionalScoresResult } from './lib/regionalScores';
+import { type RegionalMethod, type RegionalScoresResult } from './lib/regionalScores';
 import { generateReportPdf } from './lib/pdfReport';
 import RegionalScoresPanel, { type RegionalPanelParent } from './RegionalScoresPanel';
 
@@ -112,9 +120,10 @@ export default function AppPrimaria() {
   const regionalRef = useRef<RegionalCache>({});
   const slotsRef = useRef(slots);
   useEffect(() => { slotsRef.current = slots; });
-  // Método actualmente mostrado por el panel (último que emitió scores): el PDF usa
-  // ese para la herencia por región, así coincide con lo que ve el usuario.
-  const [lastMethod, setLastMethod] = useState<RegionalMethod>('geometric');
+
+  // Raíz del informe (lo que se rasteriza al PDF) + flag de "generando" para el botón.
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // ---------------------------------------
   // Manejo de slots.
@@ -143,43 +152,26 @@ export default function AppPrimaria() {
   const onRegionalResults = useCallback(
     (method: RegionalMethod, bySide: Partial<Record<Side, RegionalScoresResult>>) => {
       regionalRef.current = { ...regionalRef.current, [method]: bySide };
-      setLastMethod(method);
       persistAll();
     },
     [persistAll],
   );
 
-  // Cara alineada (ImageData 112×112) → dataURL PNG, para incrustar en el PDF.
-  const alignedToDataUrl = (result: PipelineOutput): string => {
-    const c = document.createElement('canvas');
-    c.width = result.aligned.width; c.height = result.aligned.height;
-    c.getContext('2d')!.putImageData(result.aligned, 0, 0);
-    return c.toDataURL('image/png');
-  };
-
-  // Descarga el informe en PDF (client-side; las imágenes no salen del browser).
-  const handleDownloadPdf = () => {
-    const cr = slots.child.result;
-    if (!globalVerdict || !cr) return;
-    const bySide = regionalRef.current[lastMethod];
-    const scorer = getScorer(lastMethod);
-    const regional = bySide
-      ? buildRegionalVerdict(bySide, {
-          method: lastMethod,
-          methodLabel: scorer?.label ?? lastMethod,
-          confidence: scorer?.baseConfidence ?? 'experimental',
-        })
-      : null;
-    generateReportPdf({
-      faces: {
-        padre: slots.padre.result ? { label: 'Padre', dataUrl: alignedToDataUrl(slots.padre.result) } : undefined,
-        child: { label: 'Hijo/a', dataUrl: alignedToDataUrl(cr) },
-        madre: slots.madre.result ? { label: 'Madre', dataUrl: alignedToDataUrl(slots.madre.result) } : undefined,
-      },
-      global: globalVerdict,
-      regional,
-      parentLabels: { left: 'Padre', right: 'Madre' },
-    });
+  // Descarga el informe en PDF rasterizando el DOM real del informe (lib/pdfReport
+  // v2.0). 100% client-side: html2canvas trabaja sobre el DOM local, las imágenes
+  // no salen del browser. Lo no esencial (botones, inputs, solapas) se omite vía
+  // `data-pdf-exclude` en el JSX.
+  const handleDownloadPdf = async () => {
+    if (!reportRef.current || generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      await generateReportPdf(reportRef.current);
+    } catch (e) {
+      console.error('[AppPrimaria] generar PDF falló:', e);
+      setGlobalError(e instanceof Error ? `No se pudo generar el PDF: ${e.message}` : 'No se pudo generar el PDF.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const onPickFile = (key: SlotKey, file: File | null) => {
@@ -402,7 +394,7 @@ export default function AppPrimaria() {
     : '#ccc';
 
   return (
-    <div style={{ fontFamily: 'monospace', padding: 20, maxWidth: 1100, margin: '0 auto' }}>
+    <div ref={reportRef} style={{ fontFamily: 'monospace', padding: 20, maxWidth: 1100, margin: '0 auto' }}>
       <h1 style={{ borderBottom: '2px solid #333', paddingBottom: 8 }}>
         App primaria — ¿A quién se parece?
       </h1>
@@ -416,8 +408,26 @@ export default function AppPrimaria() {
 
       {/* RECUADRO 1: fotos originales (arriba) + veredicto global (debajo) */}
       <div style={{ border: `2px solid ${boxBorder}`, borderRadius: 12, padding: 16, marginTop: 12, background: '#fcfcff' }}>
-        {/* Bloque de guardado local + limpiar, arriba a la derecha */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        {/* Cabecera del recuadro (no entra al PDF): descargar PDF a la IZQUIERDA,
+            guardado/limpiar a la DERECHA. */}
+        <div data-pdf-exclude="1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+          <div>
+            {globalVerdict && (
+              <button
+                onClick={() => void handleDownloadPdf()}
+                disabled={generatingPdf}
+                title="Descargar el informe en PDF (se genera en tu navegador; las imágenes no se suben)"
+                style={{
+                  fontFamily: 'monospace', fontSize: 13, fontWeight: 700,
+                  cursor: generatingPdf ? 'wait' : 'pointer',
+                  background: '#fff', color: '#7c3aed', border: '1px solid #c4b5fd',
+                  borderRadius: 6, padding: '6px 12px',
+                }}
+              >
+                {generatingPdf ? 'Generando PDF…' : '📄 Descargar PDF'}
+              </button>
+            )}
+          </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: '#999' }} title="IndexedDB en este equipo; las imágenes no se suben a ningún lado">
               💾 guardado localmente en este equipo
@@ -451,7 +461,7 @@ export default function AppPrimaria() {
           ))}
         </div>
 
-        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div data-pdf-exclude="1" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button
             onClick={() => void onAnalyze()}
             disabled={!canAnalyze}
@@ -485,7 +495,6 @@ export default function AppPrimaria() {
             global={globalVerdict}
             hasCalibration={!calError}
             calWarning={calWarning}
-            onDownloadPdf={handleDownloadPdf}
           />
         )}
       </div>
@@ -511,11 +520,10 @@ export default function AppPrimaria() {
 // =========================================================
 // Veredicto GLOBAL: cara completa (coseno + posterior calibrado por lado).
 // =========================================================
-function GlobalVerdictView({ global, hasCalibration, calWarning, onDownloadPdf }: {
+function GlobalVerdictView({ global, hasCalibration, calWarning }: {
   global: GlobalVerdict;
   hasCalibration: boolean;
   calWarning: string | null;
-  onDownloadPdf?: () => void;
 }) {
   const sides: Side[] = ['left', 'right'];
   const present = sides.filter((s) => global.cosine[s] != null);
@@ -535,22 +543,7 @@ function GlobalVerdictView({ global, hasCalibration, calWarning, onDownloadPdf }
 
   return (
     <div style={{ borderTop: '1px solid #e5e5e5', marginTop: 16, paddingTop: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: headlineColor, flex: 1 }}>{headline}</div>
-        {onDownloadPdf && (
-          <button
-            onClick={onDownloadPdf}
-            title="Descargar el informe en PDF (se genera en tu navegador; las imágenes no se suben)"
-            style={{
-              flexShrink: 0, fontFamily: 'monospace', fontSize: 13, cursor: 'pointer',
-              background: '#fff', color: '#7c3aed', border: '1px solid #c4b5fd',
-              borderRadius: 6, padding: '6px 12px', fontWeight: 700,
-            }}
-          >
-            📄 Descargar PDF
-          </button>
-        )}
-      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: headlineColor }}>{headline}</div>
       <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
         Parecido global por cara completa (coseno de embeddings){hasCalibration ? ' + probabilidad calibrada de parentesco (KinFaceW-I)' : ''}.
       </div>
@@ -628,7 +621,7 @@ function FaceSlot({ meta, slot, onPick, onDragOver, onDragLeave, onDrop }: {
       <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>{meta.hint}</div>
 
       {!slot.previewUrl && (
-        <div style={{
+        <div data-pdf-exclude="1" style={{
           border: '2px dashed #bbb', borderRadius: 4, padding: '24px 12px', textAlign: 'center',
           fontSize: 12, color: '#777', marginBottom: 8, background: slot.isDraggingOver ? '#dceaff' : '#fafafa',
         }}>
@@ -637,7 +630,7 @@ function FaceSlot({ meta, slot, onPick, onDragOver, onDragLeave, onDrop }: {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div data-pdf-exclude="1" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <input
           ref={fileInputRef} type="file" accept="image/*"
           onChange={(e) => onPick(e.target.files?.[0] ?? null)}
