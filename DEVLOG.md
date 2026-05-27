@@ -11,6 +11,64 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-05-27
 
+### `b8ba8ba` · [claude] App primaria #31 — PDF fiel al DOM (html2canvas) + botón arriba-izquierda `T31`
+
+Rework del informe PDF (#31) al criterio acordado con el usuario: que el PDF
+**"respete lo que se ve en la página"** y que el botón viva en la **esquina superior
+izquierda**. La v1 (`823bf87`, abajo) re-dibujaba un A4 a mano con jsPDF — solo un
+resumen textual, no podía reproducir radar/heatmap/barras y divergía de la UI.
+
+- **`lib/pdfReport.ts`** (v1.0→v2.0): `generateReportPdf(element, opts?)` ahora
+  **rasteriza el DOM real** del informe con **html2canvas** y lo pagina en A4
+  cortando la captura en franjas del alto de página (sin deformar). Sigue 100%
+  client-side: html2canvas trabaja sobre el DOM local, las imágenes no salen del
+  browser. Las franjas se emiten en **JPEG q=0.92** (fondo blanco opaco, sin alpha)
+  → el PDF baja de **~18.7 MB** (PNG@2x) a **~540 KB** sin pérdida visible.
+- **`AppPrimaria.tsx`** (v1.3→v1.4): el botón **"📄 Descargar PDF" se movió a la
+  esquina superior izquierda** del recuadro (espeja al "🗑️ Limpiar" de la derecha),
+  muestra "Generando PDF…" mientras trabaja. `handleDownloadPdf` es async y captura
+  `reportRef`. Se eliminó el armado manual previo (`alignedToDataUrl`, veredicto
+  regional, `lastMethod`). Lo **no esencial para un documento estático** (botones
+  Analizar/Descargar/Limpiar, inputs, hints de drag-and-drop) se marca con
+  `data-pdf-exclude` y se omite en la captura.
+- **`RegionalScoresPanel.tsx`** (v1.5→v1.6): mismos marcadores `data-pdf-exclude` en
+  sus controles (solapas/radios de método, radios de escala, toggle de heatmap,
+  botón Calcular). Conserva lo informativo (confiabilidad, descripciones, herencia,
+  caras, barras, radar, heatmap). Aditivo: no cambia la pantalla ni el Comparador.
+- **`scripts/app-primaria-pdf-smoke.mjs`**: captura de página antes de la descarga
+  (verifica el botón arriba-izquierda). Dep nueva: **`html2canvas`**.
+
+Verificado: `tsc -b` OK; AppPrimaria/pdfReport lint-clean (errores de lint
+preexistentes en Spike*/effect autoCompute). Smoke **PASS** (descarga `%PDF-`
+válido, 540 KB) + revisión visual multimodal (botón arriba-izquierda + PDF fiel:
+mismas caras, veredicto+barras, herencia, radar; sin controles). Recursos
+(dev-monitored): baseline 46°C → pico **95°C / 94% CPU** (= inferencia ONNX WASM de
+las 3 caras, no el PDF) → vuelta a 50°C.
+
+### `823bf87` · [claude] App primaria #31 — descarga de informe en PDF (client-side) `T31✓`
+
+Botón **"📄 Descargar PDF"** en el veredicto de la App primaria. Genera el informe
+con **jsPDF, 100% en el browser** — las imágenes nunca salen del navegador.
+
+- **`client/src/lib/pdfReport.ts`** (nuevo): `generateReportPdf(data)` compone un A4
+  con título + fecha, las **3 caras** (alineadas, rasterizadas a dataURL PNG) con
+  etiqueta y —para los progenitores— coseno + posterior calibrado (#6); el
+  **veredicto global** ("se parece más a X", coloreado por ganador); la **herencia
+  por región** del método mostrado (Heredó-de-Padre/Madre/Equilibrado + nota de
+  método/confiabilidad); y un disclaimer de privacidad. jsPDF/helvetica renderiza
+  bien los acentos (latin-1).
+- **`AppPrimaria.tsx`** (v1.2→v1.3): el botón vive en `GlobalVerdictView` (aparece
+  con el veredicto). `handleDownloadPdf` rasteriza las caras alineadas
+  (`alignedToDataUrl`) y arma el veredicto regional desde `regionalRef[lastMethod]`
+  — `lastMethod` = el método que el panel está mostrando (trackeado por `onResults`)
+  → el PDF coincide con lo que ve el usuario.
+- **Dep nueva**: `jspdf` (client-side, liviano).
+
+Verificado: `tsc -b` OK, lint-clean. Smoke nuevo `app-primaria-pdf-smoke.mjs` PASS
+(dispara la descarga, valida cabecera `%PDF-`, nombre `informe-parecido-*.pdf` y
+tamaño ~119 KB con caras embebidas) + **revisión visual del PDF** (layout y acentos
+correctos). El dev server se reinició para que vite pre-bundleara jspdf.
+
 ### `8954f9c` · [claude] App primaria #12 — ajustes de UX + persistencia local + progreso occlusion (MVP cliente) `T12` `T30`
 
 Refinamientos de la App primaria pedidos por el usuario tras revisar la v1; con

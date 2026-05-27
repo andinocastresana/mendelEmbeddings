@@ -50,6 +50,48 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-05-27 · [claude] · App primaria #31 — PDF rehecho fiel al DOM + botón arriba-izquierda (commiteado, SIN pushear)
+
+- **Rama / commits**: `main`. `b8ba8ba` (código v2) + el commit de docs de esta tanda
+  (DEVLOG/TAREAS/este handoff). **OJO: NO pusheados** — el usuario pidió solo
+  commitear. Además quedó SIN pushear el `823bf87` de la tanda anterior (origin/main
+  sigue en `7e4a2ed`). Hay 3 commits locales por delante de origin.
+- **Hice**: el usuario me recordó lo acordado para #31 y la v1 (`823bf87`) no lo
+  cumplía. **Rework v2**: (1) el PDF ahora **rasteriza el DOM real** del informe con
+  **html2canvas** y lo pagina en A4 (en vez de re-dibujar un A4 a mano con jsPDF que
+  solo tenía un resumen textual) → el PDF refleja caras, veredicto+barras, herencia,
+  radar y heatmap tal como se ven. (2) Botón "📄 Descargar PDF" movido a la **esquina
+  superior izquierda**. (3) Lo no esencial para un doc estático (botones, inputs,
+  solapas, radios, hints) se omite con `data-pdf-exclude` + `ignoreElements`.
+  (4) Franjas en JPEG q=0.92 → 18.7 MB ⇒ 540 KB. `lib/pdfReport` v2.0,
+  `AppPrimaria` v1.4, `RegionalScoresPanel` v1.6 (marcadores aditivos).
+- **Abierto / handoff**: **PUSH pendiente** del OK del usuario (`7e4a2ed..` con
+  `823bf87`+`b8ba8ba`+docs). Sigue **#32 — compartir vía servidor** (primer eje
+  server-side / Track 2b; antes de codear definir QUÉ se sube, consentimiento,
+  retención, privacidad).
+- **Ojo con**: `html2canvas` es dep nueva (ya en `package.json`/lock, commiteada).
+  Si levantás dev y falla el import, reiniciá `npm run dev` para que vite lo
+  pre-bundlee. NO toqué el trabajo de vitrina sin commitear de codex
+  (`_meta/VITRINA_*`, `_meta/ANTECEDENTES_APP_PRIMARIA_COMPETENCIA.md`,
+  `scripts/build_transfermarkt_headshot_manifest.py`) — commiteé solo mis archivos
+  con paths explícitos.
+
+## 2026-05-27 · [claude] · App primaria #31 — informe PDF client-side commiteado+pusheado
+
+- **Rama / commits**: `main`. `823bf87` (código) + el commit de docs de esta tanda
+  (DEVLOG/TAREAS/este handoff). Pusheados a `origin/main`.
+- **Hice**: cerré **#31** — botón "📄 Descargar PDF" en el veredicto de la App
+  primaria que genera el informe con **jsPDF, 100% client-side** (`lib/pdfReport`):
+  caras + global (coseno + posterior #6) + herencia por región del método mostrado
+  + disclaimer. Dep nueva `jspdf`. Smoke `app-primaria-pdf-smoke.mjs` (valida %PDF-)
+  + revisión visual.
+- **Abierto / handoff**: queda **#32 — compartir vía servidor** (primer eje
+  server-side / Track 2b; antes de codear definir QUÉ se sube — ¿imágenes? ¿solo el
+  PDF/scores? — consentimiento, retención, privacidad).
+- **Ojo con**: instalé `jspdf` → reinicié el dev server para que vite lo
+  pre-bundleara (si lo levantás y falla el import de jspdf, reiniciá `npm run dev`).
+  Sigo sin tocar tu trabajo de vitrina sin commitear.
+
 ## 2026-05-27 · [claude] · App primaria #12 — MVP cliente cerrado (UX + persistencia + progreso) commiteado+pusheado
 
 - **Rama / commits**: `main`. `8954f9c` (código, 7 archivos client) + el commit de
@@ -97,6 +139,22 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 - **Ojo con**: estas fotos NO son publicables todavía; son dataset local de trabajo
   para comparación. No tocar los cambios locales de App primaria que ya estaban
   en el worktree (`client/src/AppPrimaria.tsx`, `RegionalScoresPanel.tsx`, etc.).
+
+### Update mismo dia — plan de release vitrina
+
+- **Hice**: guardé el plan en `_meta/VITRINA_MUNDIAL2026_PLAN.md` para retomar
+  cuando FIFA confirme listas finales (objetivo completo: 48×26 = 1248 jugadores).
+  La app debe precomputar offline embeddings/QC/matrices; comparar todo contra
+  todo no es caro si ya hay embeddings (~778k pares, matriz float32 ~6.2 MB).
+- **Funcionalidades MVP**: matriz 48×48 de selecciones, detalle 26×26 selección vs
+  selección, ranking global de pares más parecidos, perfil simple de jugador con
+  "dobles del Mundial".
+- **Ampliado**: perfil de selección, boxplots intra-selección (#14), dendrograma o
+  grafo de selecciones (#15), comparador libre de jugadores precargados y vista
+  interna de cobertura/QC.
+- **Ojo con**: lenguaje cuidadoso: hablar de similitud facial computacional entre
+  fotos del torneo; evitar raza/etnicidad/origen e incluir limitaciones de pose,
+  iluminación, edad, barba, calidad de imagen y sesgo del modelo.
 
 ## 2026-05-27 · [claude] · App primaria #12 (v1) commiteada+pusheada — sigue apariencia + PDF + compartir
 
