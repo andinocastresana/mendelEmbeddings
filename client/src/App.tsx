@@ -1,8 +1,15 @@
 // =========================================
 // ID: PHYLOFACE_CLIENT_001
-// VERSION: v1.4
+// VERSION: v1.5
 // =========================================
+// Cambio v1.4 → v1.5 (Tarea #12): se agrega la pestaña "App primaria"
+// (PHYLOFACE_APP_PRIMARIA) como PRIMERA y por DEFECTO — es el objetivo final del
+// proyecto (ARQUITECTURA §2.1): 3 fotos (Padre·Hijo/a·Madre) → veredicto
+// interpretable (global calibrado + herencia por región) reusando el motor del
+// Comparador + el panel de scores regionales (#30) + la calibración (#6).
+//
 // App principal del cliente. Router simple entre:
+//   - AppPrimaria       (PHYLOFACE_APP_PRIMARIA): App primaria #12 — ¿A quién se parece?
 //   - Comparator        (PHYLOFACE_COMPARATOR): MVP Track 2a — 3 slots (P1 · Hijo · P2)
 //   - GenealogyTree     (PHYLOFACE_GENEALOGY_TREE): MVP Track 2b — árbol genealógico (Tarea #26)
 //   - CalibrationTab    (PHYLOFACE_CALIBRATION_TAB): Tarea #6 Fase B — histogramas + métricas
@@ -32,6 +39,7 @@
 // debug rápido del pipeline contra fixtures Python.
 
 import { useEffect, useState } from 'react';
+import AppPrimaria from './AppPrimaria';
 import Comparator from './Comparator';
 import GenealogyTree from './GenealogyTree';
 import CalibrationTab from './CalibrationTab';
@@ -40,12 +48,13 @@ import SpikeMediapipe from './SpikeMediapipe';
 import SpikeAlignment from './SpikeAlignment';
 import SpikeDetection from './SpikeDetection';
 
-type Tab = 'comparator' | 'genealogy' | 'calibration' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
+type Tab = 'primary' | 'comparator' | 'genealogy' | 'calibration' | 'onnx' | 'mediapipe' | 'alignment' | 'detection';
 
-const VALID_TABS: Tab[] = ['comparator', 'genealogy', 'calibration', 'onnx', 'mediapipe', 'alignment', 'detection'];
+const VALID_TABS: Tab[] = ['primary', 'comparator', 'genealogy', 'calibration', 'onnx', 'mediapipe', 'alignment', 'detection'];
 
 function App() {
-  const [tab, setTab] = useState<Tab>('comparator');
+  // Default = App primaria (#12), el objetivo final del proyecto (ARQUITECTURA §2.1).
+  const [tab, setTab] = useState<Tab>('primary');
 
   // Listener global para cambio de tab vía CustomEvent. Permite que componentes
   // hijos (TripletModal en GenealogyTree) salten al Comparador MVP sin tener
@@ -84,6 +93,9 @@ function App() {
         borderBottom: '1px solid #ccc',
         marginBottom: -1,
       }}>
+        <div style={tabStyle(tab === 'primary')} onClick={() => setTab('primary')}>
+          App primaria
+        </div>
         <div style={tabStyle(tab === 'comparator')} onClick={() => setTab('comparator')}>
           Comparador (MVP)
         </div>
@@ -108,6 +120,7 @@ function App() {
       </div>
 
       {/* Contenido */}
+      {tab === 'primary' && <AppPrimaria />}
       {tab === 'comparator' && <Comparator />}
       {tab === 'genealogy' && <GenealogyTree />}
       {tab === 'calibration' && <CalibrationTab />}

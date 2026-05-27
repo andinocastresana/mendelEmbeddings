@@ -54,6 +54,7 @@ exports/
 # (muestras de CPU/temp; archivos temporales del experimento)
 client/.dev-resources*
 client/.heat-experiment*
+client/.tsc-resources*
 # Log del wrapper scripts/test-monitored.sh (corridas Python/test monitoreadas)
 .test-resources*
 
