@@ -50,6 +50,266 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-06-26 · [claude] · Fotos OFICIALES FIFA de los 1248 jugadores (API v3) → manifiesto + Excel + descarga (commiteado)
+
+- **Rama / commits**: `main`. `43a39cb` (los 4 scripts FIFA) + el commit de docs de
+  esta tanda (DEVLOG/este handoff/`_meta/DEPLOY_PLAN.md`). **NO pusheados** (cierre de
+  jornada; el usuario pidió commitear, no push). Outputs en `data/` siguen gitignored.
+- **Descarga COMPLETA**: bajé las **1248 fotos @2048px** con el descargador gentil →
+  `data/input/img/teams_players/northamerica2026_fifa_official/<equipo>/<jugador>_<fifaId>.png`.
+  **1248/1248, 0 fallos, 0 baneos**, ~200 MB, 42 min. Reporte en
+  `data/output/teams/download_fifa_headshots_report.json`. Listas para tu QC/embeddings.
+- **Hice (PARA TU TRACK DE VITRINA, codex)**: el usuario pidió rescatar las fotos
+  oficiales FIFA de todo el Mundial. **Encontré la fuente consumible que vos habías
+  marcado como no hallada**: la página `team-news` es una SPA, pero por debajo llama a
+  la **API v3 REST** de FIFA, fetcheable directo con `requests` (sin browser):
+  - equipos: `api.fifa.com/api/v3/calendar/matches?idCompetition=17&idSeason=285023`
+    (104 partidos → **48 IdTeam** con nombre).
+  - squad: `api.fifa.com/api/v3/teams/{IdTeam}/squad?idCompetition=17&idSeason=285023&language=es`
+    → por jugador: `IdPlayer`, `PlayerName`, `JerseyNum`, `PositionLocalized`,
+    `BirthDate`, `Height`, `Weight`, `IdCountry`, y **`PlayerPicture.PictureUrl`** = base
+    transform de `digitalhub.fifa.com`. Se le agrega
+    `?io=transform:fill,aspectratio:1x1,width:N,gravity:top&quality=Q` para cualquier
+    resolución (CDN sirve ≥4096; crop 1x1 gravity:top = cara centrada, ideal embeddings).
+  - `idCompetition=17` / `idSeason=285023` son **constantes**; solo varía `IdTeam`.
+- **Artefactos generados** (gitignored, `data/`): 
+  `data/output/teams/manifest_fifa_northamerica2026_official.json` (schema
+  `phyloface-fifa-official-headshot-manifest-v0.1`) y
+  `data/output/teams/fichas_fifa_northamerica2026.xlsx` (1248 filas, hoja Jugadores +
+  Resumen, hyperlinks a la foto best). **Cobertura 48/48 equipos, 1248/1248 jugadores,
+  100% con foto.** Corrida = 29 s, sin costo térmico (I/O de red).
+- **Scripts nuevos** (sin commitear): `scripts/build_fifa_squad_manifest.py` (cosecha API
+  v3 → JSON, requests+backoff, header `PHYLOFACE_FIFA_SQUAD_MANIFEST`) y
+  `scripts/build_fifa_squad_xlsx.py` (JSON → xlsx, `PHYLOFACE_FIFA_SQUAD_XLSX`). También
+  quedó `client/scripts/fifa_harvest_squads.mjs` = el **probe Playwright** que descubrió
+  la API (interceptó la red); ya no es el camino productivo (Python directo lo reemplaza)
+  pero sirve si FIFA cambia y hay que re-descubrir endpoints.
+- **Implicancia para vos**: estas fotos oficiales son un **dataset estandarizado muy
+  superior** al Transfermarkt para el QC/embeddings de la vitrina (encuadre 1x1
+  consistente, 100% cobertura vs 259/271). El siguiente paso natural sería re-correr tu
+  pipeline de QC+similitud sobre estas fotos. Instalé `openpyxl` en `face-sim`.
+- **Ojo con (licencias)**: las fotos son **copyright FIFA/Getty** →
+  `license_status=UNREVIEWED_COPYRIGHT_FIFA_GETTY`, `publication_ok=false`. **NO publicar
+  ni redistribuir**; uso local de inferencia. NO resuelven el guardrail de publicación de
+  la vitrina (`_meta/DEPLOY_PLAN.md §0`): para publicar caras sigue haciendo falta fuente
+  licenciada (Wikimedia/Commons). El usuario fue claro: las imágenes solo se usan local.
+- **No toqué** tu trabajo de vitrina sin commitear.
+
+## 2026-06-26 · [codex] · Vitrina: QC facial final 259/271 y artefactos regenerados
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: corregí `scripts/qc_transfermarkt_headshots.py` para calcular ratios
+  de caras secundarias dentro de `face_metrics` y quitar un bloque residual que
+  rompía el script. Repetí QC con `--include-embeddings`, usando `det_thresh=0.20`
+  y regla de cara dominante para falsos positivos chicos; regeneré
+  `data/output/teams/vitrina_transfermarkt_northamerica2026_similarity_pilot.json`,
+  `data/output/teams/coverage_report/*` y `data/output/teams/r_heatmaps/*`.
+- **Resultado**: QC final `259/271` aceptados, `12` rechazados únicamente por
+  `missing_local_image`; los `259` aceptados tienen embedding. Payload final:
+  `259` jugadores, `40` selecciones, matrices `mean`, `median`, `top3_mean`,
+  `top5_mean`. Páginas locales verificadas con HTTP `200`:
+  `http://127.0.0.1:4177/_meta/vitrina_pilot_viewer.html` y
+  `http://127.0.0.1:4177/data/output/teams/coverage_report/coverage_report.html`.
+- **Abierto / handoff**: quedan 12 fotos realmente ausentes por resolver; prioridad
+  de cobertura: Jordan `5/8`, Qatar `4/6`, Uzbekistan `6/8`, luego Ghana,
+  Paraguay, Egypt, Scotland, Iran con un faltante cada uno.
+- **Ojo con**: los heatmaps R se generaron, pero `Rscript` emitió avisos de
+  `number of columns of result is not a multiple of vector length`; revisar el
+  script si esas imágenes se usan como referencia formal. Para deploy público,
+  NO publicar fotos Transfermarkt ni campos `local_image`.
+
+## 2026-06-26 · [codex] · Vitrina: reporte de cobertura y chequeo FIFA/Getty
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: agregué `scripts/report_vitrina_coverage.py` para resumir manifiesto
+  Transfermarkt + QC por selección y por jugador rechazado. Generé salidas locales
+  en `data/output/teams/coverage_report/`: `coverage_report.html`,
+  `coverage_by_team.csv`, `rejected_players.csv`. También busqué fuentes oficiales:
+  The Guardian confirma que Getty hizo retratos oficiales de los 1.248 jugadores y
+  48 managers "on behalf of FIFA", pero no encontré todavía una página pública FIFA
+  con headshots consumibles/descargables por jugador.
+- **Resultado**: prioridad local de arreglo por selección: Uzbekistan `2/8`
+  aceptados, Senegal `3/8`, Ivory Coast `3/7`, France `4/8`, Jordan `5/8`,
+  Curaçao `3/6`, Colombia/Norway/Turkey `5/8`, Qatar `4/6`. El reporte está en
+  `http://127.0.0.1:4177/data/output/teams/coverage_report/coverage_report.html`
+  si el servidor local sigue corriendo.
+- **Abierto / handoff**: siguiente paso natural = resolver cobertura de los equipos
+  priorizados. Investigar si Getty/FIFA tiene endpoint/licencia/API usable; si no,
+  corregir Transfermarkt por overrides/redescarga o buscar fuentes oficiales de
+  federaciones. Recordatorio deploy: NO publicar fotos Transfermarkt ni rutas
+  `local_image`.
+- **Ojo con**: el reporte pondera faltantes/rechazos para priorizar, no implica que
+  todos los rechazos sean arreglables automáticamente.
+
+## 2026-06-26 · [codex] · Vitrina: agregaciones top-k para heatmap/grafo
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: implementé la prueba #2 del plan de mejoras del heatmap. El builder
+  `scripts/build_vitrina_similarity_payload.py` ahora agrega
+  `team_similarity_matrices.top3_mean` y `top5_mean` además de `mean` y `median`.
+  El viewer local `_meta/vitrina_pilot_viewer.html` permite seleccionar
+  `Top 3 promedio` y `Top 5 promedio`; matriz, heatmap clusterizado y grafo usan
+  la agregación activa. El script R `scripts/plot_vitrina_heatmap_hclust.R` ahora
+  genera PNGs para las cuatro agregaciones.
+- **Resultado**: top-k expande mucho la señal respecto de mean/median.
+  `top3_mean`: rango off-diagonal `-0.0207..0.2261`, std `0.0380`.
+  `top5_mean`: rango `-0.0390..0.1942`, std `0.0363`.
+  Comparación: `mean` std `0.0181`, `median` std `0.0209`.
+- **Verifiqué**: py_compile, regeneración de payload, Rscript OK, Playwright
+  headless OK. En `top3_mean`, cluster: 1600 celdas; grafo kNN k=3: 40 nodos,
+  89 aristas, score `0.115..0.226`.
+- **Abierto / handoff**: inspeccionar visualmente si `top3_mean` o `top5_mean`
+  revela estructura útil; después seguir con mejora #3 (más cobertura por selección)
+  o formalizar una vista React publicable sin fotos/licencias.
+
+## 2026-06-26 · [codex] · Vitrina: solapa grafo kNN/threshold
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: agregué una tercera solapa `Grafo` al viewer local gitignored
+  `_meta/vitrina_pilot_viewer.html`. Usa la agregación activa Promedio/Mediana y
+  dibuja un SVG sin dependencias con nodos=selecciones y aristas=similitud. Modos:
+  `kNN` con slider `k` y `threshold` con slider de percentil. Grosor/opacidad de
+  arista escalan por score; tamaño de nodo por cantidad de jugadores QC OK.
+- **Verifiqué**: Playwright headless con Node 20: sin errores JS. kNN `k=3`:
+  40 nodos, 84 aristas, score `0.029..0.092`. Threshold p90 mean: 78 aristas,
+  score `0.039..0.092`. Threshold p90 median: 78 aristas, score `0.042..0.106`.
+- **Abierto / handoff**: explorar si el grafo revela pares/comunidades mejor que
+  el heatmap. Siguiente alternativa acordada antes: top-k promedio para matriz.
+- **Ojo con**: layout de fuerzas es determinístico y simple, no una librería de
+  grafos robusta. Si se formaliza en React conviene evaluar d3-force o precomputar
+  posiciones. Importante por el handoff de deploy: no publicar fotos Transfermarkt;
+  sanear `local_image` del payload público.
+
+## 2026-06-26 · [claude] · Plan de deploy estático (Cloudflare) + requisitos para la vista de vitrina
+
+- **Rama / commits**: `main`, sin commits (working tree).
+- **Hice**: el usuario quiere publicar el proyecto con dominio propio. Definí la
+  infraestructura de deploy en **`_meta/DEPLOY_PLAN.md`** (no toqué código de la app):
+  sitio 100% estático en **Cloudflare** (Registrar + Pages; **R2** para el modelo de
+  167 MiB cuando toque la App primaria, porque excede el límite de 25 MiB/archivo de
+  Pages — el WASM de ORT de 26 MiB también). Dos tiers: **Tier 1 = vitrina ahora**
+  (solo datos precomputados, sin motor, sin headers), **Tier 2 = App primaria futura**
+  (modelo+WASM en R2, URL del modelo parametrizable vía `VITE_MODEL_URL`, COOP/COEP
+  solo si se va a WASM threaded). Recomendé **dos proyectos de Pages** (subdominios)
+  para destrabar la vitrina sin acoplarla al tier 2.
+- **Abierto / handoff (PARA CODEX)**: la vista de vitrina es tu track. Vi que ya tenés
+  el prototipo local `_meta/vitrina_pilot_viewer.html` (heatmaps + dendrogramas + modal
+  país-vs-país + mean/median) y dejaste dicho "si se formaliza, mover a React real".
+  Cuando lo lleves a React dentro de `client/`, **tres requisitos del plan de deploy**:
+  1. **Guardrail de licencias (duro)**: NO renderizar las fotos de los jugadores
+     (Transfermarkt = `UNREVIEWED_NONPUBLIC_RESEARCH` → mostrar la foto es redistribuir).
+     OK nombres/selección/posición/scores/matrices/grafos/rankings; avatares genéricos
+     o iniciales, nunca la cara.
+  2. **Sanear el payload publicado**: el JSON crudo trae `local_image` con rutas a
+     archivos locales; el JSON que va a la web debe excluir ese campo (derivar un
+     `vitrina_payload.public.json`). Idealmente un flag `--public-output` en
+     `build_vitrina_similarity_payload.py` en vez de un script suelto.
+  3. Si la vitrina convive con la App primaria en la misma SPA, cuidar **code-splitting**
+     para que el bundle de la vitrina NO arrastre `onnxruntime-web`/el modelo (o ir por
+     dos proyectos de Pages, mi recomendación por defecto).
+  El destino de deploy está en `_meta/DEPLOY_PLAN.md`.
+- **Ojo con**: NO toqué tu trabajo de vitrina sin commitear (scripts `qc_*` /
+  `build_vitrina_*` / `build_transfermarkt_*`, `_meta/VITRINA_*`, `_meta/ANTECEDENTES_*`,
+  el viewer HTML). `_meta/DEPLOY_PLAN.md` es nuevo y solo mío.
+
+## 2026-06-26 · [codex] · Vitrina: variante mediana para matriz seleccion-seleccion
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: implementé la prueba #1 pedida por el usuario: agregación por mediana.
+  `scripts/build_vitrina_similarity_payload.py` ahora genera
+  `team_similarity_matrices.mean` y `.median` preservando
+  `team_similarity_matrix` como alias de `mean`. Regeneré el payload local. El
+  viewer gitignored `_meta/vitrina_pilot_viewer.html` tiene selector
+  Promedio/Mediana y recalcula matriz, cluster y leyendas. El script R
+  `scripts/plot_vitrina_heatmap_hclust.R` ahora genera ambas agregaciones en
+  `data/output/teams/r_heatmaps/mean/` y `/median/`.
+- **Resultado**: mediana amplía levemente la dispersión off-diagonal:
+  mean std `0.0181`, rango `-0.048..0.092`; median std `0.0209`, rango
+  `-0.054..0.106`. No cambia la conclusión de fondo todavía, pero es una variante
+  útil para inspección.
+- **Verifiqué**: py_compile del builder, regeneración del payload, Rscript OK,
+  Playwright headless OK con selector `median` (`1600` celdas, leyenda mediana).
+- **Abierto / handoff**: siguiente prueba acordada = #2 top-k promedio de pares más
+  parecidos entre selecciones.
+
+## 2026-06-26 · [codex] · Viewer vitrina: color min-max y nota de metrica
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: ajusté `_meta/vitrina_pilot_viewer.html` para que el heatmap
+  clusterizado use una escala de color min-max mucho más contrastante sobre los
+  cruces entre selecciones; la diagonal queda neutra. La leyenda ahora aclara que
+  son colores escalados del score original y muestra el rango real. En la primera
+  solapa agregué una nota breve con tooltip explicando la métrica original:
+  promedio de cosenos ArcFace entre todos los pares de jugadores aceptados por QC.
+- **Verifiqué**: Playwright headless con Node 20: sin errores JS; 1600 celdas en
+  cluster; modal país-vs-país sigue abriendo; leyenda min-max presente.
+- **Abierto / handoff**: si se lleva a React, hacer configurable la paleta y la
+  inclusión/exclusión de diagonal en el escalado.
+- **Ojo con**: sigue siendo viewer local gitignored.
+
+## 2026-06-26 · [codex] · Viewer vitrina: dendrogramas normalizados y modal pais-vs-pais
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: extendí el viewer local gitignored `_meta/vitrina_pilot_viewer.html`.
+  La segunda solapa ahora muestra heatmap completo con dendrograma superior y
+  lateral; las alturas usan una escala visual normalizada/no lineal para magnificar
+  diferencias sin cambiar el clustering. En la primera solapa, cada celda de la
+  matriz selección-vs-selección abre un modal con heatmap jugador-vs-jugador para
+  esos dos países, resumen promedio/mediana/max/pares y tooltips por celda.
+- **Verifiqué**: Playwright headless con Node 20: sin errores JS; modal Argentina
+  vs Austria abrió `6 x 6 = 36` celdas; cluster mantiene `1600` celdas, `39` ramas
+  arriba y `39` ramas laterales.
+- **Abierto / handoff**: si esto se formaliza, mover el viewer a una pantalla React
+  real y decidir si la normalización visual del dendrograma debe ser configurable
+  desde UI.
+- **Ojo con**: `_meta/vitrina_pilot_viewer.html` está ignorado por `*.html`; sigue
+  siendo inspección local, no código versionado.
+
+## 2026-06-26 · [codex] · Vitrina 2026: QC facial y payload piloto de similitudes
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: retomé la línea de vitrina sin tocar App primaria. Agregué
+  `scripts/qc_transfermarkt_headshots.py` para QC facial offline de los retratos
+  Transfermarkt y `scripts/build_vitrina_similarity_payload.py` para construir un
+  JSON estático de similitudes desde el QC. Corrí QC completo en `face-sim` CPU
+  (`buffalo_l`, `det_size=640`, `min_det_score=0.50`, `--include-embeddings`) y
+  generé el payload piloto gitignored.
+- **Resultado**: QC local
+  `data/output/teams/manifest_transfermarkt_northamerica2026_headshots_qc.json`:
+  271 evaluados, 198 aceptados con embedding, 73 rechazados
+  (`missing_local_image=12`, `no_face_detected=58`, `image_read_error=2`,
+  `not_exactly_one_face=1`). Payload local
+  `data/output/teams/vitrina_transfermarkt_northamerica2026_similarity_pilot.json`:
+  198 jugadores, 40 selecciones, matriz jugador-jugador, matriz selección-selección,
+  stats intra-selección y top pares; ~1.3 MB.
+- **Abierto / handoff**: siguiente paso natural = revisar manualmente los 58
+  `no_face_detected` y los 12 `missing_local_image`, arreglar o overridear los que
+  valgan la pena, y después empezar una vista web interna de vitrina usando el
+  payload piloto. También decidir si se versionan estos scripts ahora o se espera
+  a cerrar el primer MVP visual.
+- **Ojo con**: los retratos Transfermarkt siguen marcados como
+  `UNREVIEWED_NONPUBLIC_RESEARCH`; no publicar ni redistribuir. Dos archivos locales
+  parecen ilegibles: `iraq/fahad-talib.png` y `ivory-coast/ghislain-konan.png`.
+  `det_size=1024` empeoró el smoke inicial, por eso quedó 640 como default.
+
+## 2026-06-26 · [claude] · Push de los 3 commits de #31 a origin/main
+
+- **Rama / commits**: `main`. Pusheado `7e4a2ed..e154e25` (3 commits que estaban
+  locales por delante de origin): `823bf87` (PDF v1), `b8ba8ba` (PDF fiel al DOM
+  con html2canvas + botón arriba-izquierda), `e154e25` (docs #31). `origin/main`
+  pasó de `7e4a2ed` a `e154e25`.
+- **Hice**: solo el push pendiente que el handoff anterior dejó abierto a la espera
+  del OK del usuario. Sin cambios de código en esta sesión.
+- **Abierto / handoff**: sigue **#32 — compartir vía servidor** (primer eje
+  server-side / Track 2b; antes de codear definir QUÉ se sube, consentimiento,
+  retención, privacidad). #6 sigue en progreso (resta KinFaceW-II; MLP ya evaluado,
+  no supera baseline).
+- **Ojo con**: NO toqué el trabajo de vitrina de codex sin commitear que sigue en el
+  working tree (`_meta/VITRINA_EQUIPOS_FUENTES.md`,
+  `_meta/VITRINA_MUNDIAL2026_PLAN.md`,
+  `_meta/ANTECEDENTES_APP_PRIMARIA_COMPETENCIA.md`,
+  `scripts/build_transfermarkt_headshot_manifest.py`).
+
 ## 2026-05-27 · [claude] · App primaria #31 — PDF rehecho fiel al DOM + botón arriba-izquierda (commiteado, SIN pushear)
 
 - **Rama / commits**: `main`. `b8ba8ba` (código v2) + el commit de docs de esta tanda

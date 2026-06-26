@@ -9,6 +9,59 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-06-26
+
+### `43a39cb` · [claude] Fotos oficiales FIFA WC2026 — cosecha API v3 + Excel + descarga `Vitrina`
+
+A pedido del usuario, rescate de las fichas y fotos **oficiales** de los **1248
+jugadores** del Mundial 2026. Destraba un punto que codex había dejado abierto
+(Getty/FIFA hizo los retratos oficiales pero "no encontré página pública
+consumible"): la página `/teams/<slug>/team-news` es una SPA, pero por debajo usa la
+**API v3 REST de FIFA**, fetcheable directo sin browser. `idCompetition=17`
+(Mundial masculino) e `idSeason=285023` (2026) son constantes; solo varía `IdTeam`.
+
+- **`scripts/build_fifa_squad_manifest.py`** (`PHYLOFACE_FIFA_SQUAD_MANIFEST` v0.1):
+  48 equipos vía `calendar/matches` (104 partidos → 48 `IdTeam` distintos) → squad por
+  equipo (`teams/{IdTeam}/squad`). Por jugador: nombre, dorsal, posición localizada,
+  nacimiento, altura, peso, país, `IdPlayer` y `PlayerPicture.PictureUrl` (base
+  transform de `digitalhub.fifa.com`). La URL de mejor resolución se arma con
+  `?io=transform:fill,aspectratio:1x1,width:N,gravity:top&quality=Q` (CDN sirve ≥4096;
+  crop 1x1 gravity:top = cara centrada, ideal para embeddings). `requests`+backoff.
+  Salida `data/output/teams/manifest_fifa_northamerica2026_official.json`
+  (schema `phyloface-fifa-official-headshot-manifest-v0.1`). **48/48 equipos,
+  1248/1248 jugadores, 100% con foto.**
+- **`scripts/build_fifa_squad_xlsx.py`** (`PHYLOFACE_FIFA_SQUAD_XLSX` v0.1): manifiesto
+  → Excel `fichas_fifa_northamerica2026.xlsx` (1248 filas; hoja Jugadores con hyperlink
+  a la foto + hoja Resumen de cobertura). Dep nueva `openpyxl` (instalada en `face-sim`).
+- **`scripts/download_fifa_headshots.py`** (`PHYLOFACE_FIFA_HEADSHOT_DOWNLOAD` v0.1):
+  descarga **gentil anti-baneo** (secuencial, pacing 0.5s+jitter, pausa 8s cada 100,
+  UA+Referer de browser, backoff escalado ante 429, **reanudable** vía skip de
+  existentes + escritura atómica). Corrida @2048px: **1248/1248, 0 fallos, ~200 MB**,
+  42 min, sin 429 sin recuperar. Imágenes en
+  `data/input/img/teams_players/northamerica2026_fifa_official/<equipo>/<jugador>_<fifaId>.png`.
+- **`client/scripts/fifa_harvest_squads.mjs`** (`PHYLOFACE_FIFA_HARVEST_SQUADS` v0.1):
+  probe Playwright que **descubrió la API** interceptando la red; queda como
+  herramienta de re-descubrimiento, no es el camino productivo (Python directo lo
+  reemplaza).
+
+**Licencias**: fotos copyright FIFA/Getty → `license_status=UNREVIEWED_COPYRIGHT_FIFA_GETTY`,
+`publication_ok=false`. Uso local de inferencia; **NO publicar/redistribuir**. No
+resuelven el guardrail de publicación de la vitrina (`_meta/DEPLOY_PLAN.md §0`); para
+publicar caras sigue haciendo falta fuente licenciada. Todos los outputs (`data/`) son
+gitignored. Dataset oficial estandarizado **superior** al de Transfermarkt (100%
+cobertura vs 259/271) para el QC/embeddings de la vitrina (track de codex).
+
+### docs · `_meta/DEPLOY_PLAN.md` — plan de publicación estática (Cloudflare) `Vitrina`
+
+Documento de infraestructura de deploy (sesión previa del día): sitio 100% estático en
+**Cloudflare** (Registrar + Pages; **R2** para el modelo ONNX de 167 MiB y el WASM de
+ORT de 26 MiB cuando toque la App primaria, porque exceden el límite de 25 MiB/archivo
+de Pages). Dos tiers: **Tier 1 = vitrina ahora** (datos precomputados, sin motor, sin
+headers), **Tier 2 = App primaria futura** (modelo+WASM en R2, `VITE_MODEL_URL`,
+COOP/COEP solo si WASM threaded). **§0 guardrail de licencias**: no renderizar fotos de
+jugadores; sanear `local_image` del payload publicado. La vista de vitrina es track de
+codex.
+
 ## 2026-05-27
 
 ### `b8ba8ba` · [claude] App primaria #31 — PDF fiel al DOM (html2canvas) + botón arriba-izquierda `T31`
