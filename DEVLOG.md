@@ -11,6 +11,59 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ## 2026-06-26
 
+### `(sin commit)` · [codex] Vitrina FIFA — atracción kNN y cierre de sesión
+
+Sin commitear al cierre. Dejé integrada la vista **Atracción kNN** en
+`_meta/vitrina_pilot_viewer.html` y el generador
+`scripts/build_vitrina_knn_attraction.py`, sobre el payload FIFA QC ya armado.
+La señal nueva agrega por selección los vecinos externos más parecidos de cada
+jugador y muestra destinos con proporción, conteo y score medio; no depende de la
+geometría 2D de t-SNE/PCA/MDS.
+
+También dejé actualizados `AGENTS_HANDOFF.md` y el KG del proyecto para que el
+siguiente agente tenga el contexto sin tener que reconstruir la sesión.
+
+### `4e1d5d3` · [claude] Matriz de distancia entre capitales + colonialidad, y viz parecido-vs-geo `Vitrina`
+
+Bloque geográfico-cultural para analizar **patrones migratorios** detrás del parecido
+facial entre selecciones. Dos partes:
+
+**1. Matriz de distancia entre capitales + features.**
+- **`scripts/build_capitals_distance_matrix.py`** (`PHYLOFACE_CAPITALS_DISTANCE_MATRIX` v0.1):
+  matriz great-circle (haversine, km) entre **232 capitales soberanas**, enriquecida con
+  idioma(s) (`mledoze/countries`), **último colonizador** (OWID/COLDAT de Becker) y flag
+  de los 48 del Mundial. Fuentes cacheadas en `data/input/geo/` (gist capitales+coords,
+  mledoze, OWID). Salidas en `data/output/geo/`: `world_capitals_distance.json`
+  (canónico: 232 países + matriz), `world_capitals.xlsx` (hoja Países + Matriz),
+  `world_capitals_pairs.csv` (26.796 pares con flags mismo-colonizador/idioma/wc2026).
+  Cobertura: colonizador 158/232, idioma 230/232, 47 entidades WC (Inglaterra+Escocia→UK).
+  **Limitación**: COLDAT solo cubre colonización europea de ULTRAMAR → 74 `None` que
+  incluyen imperios terrestres (otomano/ruso-soviético); entre los WC sin dato quedan
+  Austria, Bosnia, Croacia, Chequia, Noruega, Suecia, Suiza, Curazao.
+
+**2. Visualizaciones parecido-facial vs geografía/colonialidad** (sobre la matriz
+jugador-jugador FIFA de codex `vitrina_fifa_northamerica2026_similarity_pilot.json`).
+- **`scripts/geo_team_resolve.py`** (`PHYLOFACE_GEO_TEAM_RESOLVE` v0.1): helper compartido;
+  resuelve los nombres de selección **en español** del payload FIFA → registro geo
+  (capital/colonizador/idioma) vía ISO3, + `haversine`, `colonial_link` (colonia-colonia
+  Y colonia-colonizador), `partial_corr`.
+- **`scripts/plot_team_similarity_vs_geo.py`** (`PHYLOFACE_TEAM_SIM_VS_GEO` v0.2): scatter
+  equipo-equipo parecido vs distancia, color = lazo colonial/idioma, con Pearson/Spearman,
+  **test de Mantel** (permutación) y **correlaciones parciales**. FIFA-48: Mantel r=−0.20
+  (p=0.003); parcial facial~dist|colonial=−0.20, facial~colonial|dist=**+0.16** (vs +0.05
+  en el piloto Transfermarkt → el dataset estandarizado destapó el efecto colonial).
+- **`scripts/plot_player_similarity_vs_geo.py`** (`PHYLOFACE_PLAYER_SIM_VS_GEO` v0.1):
+  748k pares cruza-equipo; hexbin + curvas de media por bin de distancia. Por-par r=−0.03
+  (variación individual domina) pero pares coloniales promedian 0.033 vs 0.028 sin lazo, y
+  el lift persiste a toda distancia. Dumpea top pares cruza-equipo (Onana BEL↔Kossounou CIV…).
+- **`scripts/plot_team_similarity_map.py`** (`PHYLOFACE_TEAM_SIM_MAP` v0.1): mapa mundi
+  (basemap Natural Earth 110m cacheado), capitales = nodos, top-k aristas de parecido;
+  rojo = cruza-región (puentes coloniales/migratorios). Top-50: 27 cruza-región.
+
+Conclusión: distancia **y** colonialidad pesan, cada una con efecto propio (modesto pero
+consistente en los 3 niveles). Deps: matplotlib/scipy/openpyxl en `face-sim`. Outputs
+gitignored. Usé el payload de codex (no recalculé embeddings).
+
 ### `43a39cb` · [claude] Fotos oficiales FIFA WC2026 — cosecha API v3 + Excel + descarga `Vitrina`
 
 A pedido del usuario, rescate de las fichas y fotos **oficiales** de los **1248

@@ -50,6 +50,142 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-06-27 · [claude] · Commiteado el bloque geo/colonial (los 5 scripts) — resuelta la decisión diferida
+
+- **Rama / commits**: `main`. `4e1d5d3` (los 5 scripts geo) + el commit de docs de esta
+  tanda (DEVLOG con el hash real + este handoff). **NO pusheados** (el usuario pidió
+  commitear, no push). Outputs en `data/` siguen gitignored.
+- **Hice**: el usuario resolvió la decisión que había quedado abierta (¿commitea Claude
+  o codex?): **commiteo yo mis 5 scripts geo/colonial** con paths explícitos —
+  `build_capitals_distance_matrix.py`, `geo_team_resolve.py`,
+  `plot_team_similarity_vs_geo.py`, `plot_player_similarity_vs_geo.py`,
+  `plot_team_similarity_map.py`. Reemplacé el placeholder `(commit pendiente)` del
+  DEVLOG por `4e1d5d3`.
+- **Abierto / handoff (codex)**: NO toqué tu track de vitrina sin commitear (scripts
+  `qc_*`/`build_vitrina_*`/`build_transfermarkt_*`, `report_vitrina_coverage.py`,
+  `plot_vitrina_heatmap_hclust.R`, el viewer HTML, los `_meta/VITRINA_*` +
+  `ANTECEDENTES_*`, y tu mejora de `src/phyloface/core/detector.py`). Tu nota DEVLOG
+  `(sin commit)` sobre la atracción kNN quedó en el árbol commiteado del DEVLOG, pero
+  tu **código** sigue sin commitear → la nota sigue siendo verídica.
+- **Ojo con**: queda pendiente el PUSH (a la espera del OK del usuario). El working tree
+  sigue con todo el track vitrina de codex sin commitear.
+
+## 2026-06-26 · [claude] · Matriz de capitales + colonialidad/idioma, y viz parecido-vs-geo sobre TU payload FIFA (SIN commitear)
+
+- **Rama / commits**: `main`, **sin commitear** — el usuario dejó abierto si commitea
+  Claude o codex (decisión diferida). Si lo tomás vos: son archivos solo míos (abajo),
+  agregá entrada DEVLOG con el hash. Outputs en `data/` (gitignored).
+- **Hice**: bloque geográfico-cultural para analizar patrones migratorios detrás del
+  parecido facial entre selecciones.
+  1. **Matriz de distancia entre capitales** (`scripts/build_capitals_distance_matrix.py`):
+     232 capitales soberanas, haversine km, + **último colonizador** (OWID/COLDAT) + idioma
+     (mledoze) + flag WC2026. Salidas `data/output/geo/world_capitals.{json,xlsx}` +
+     `world_capitals_pairs.csv`. Fuentes cacheadas en `data/input/geo/`.
+  2. **3 visualizaciones sobre TU matriz FIFA**
+     (`vitrina_fifa_northamerica2026_similarity_pilot.json`): scatter equipo-equipo
+     (`plot_team_similarity_vs_geo.py`, con Mantel + parciales), scatter jugador-jugador
+     (`plot_player_similarity_vs_geo.py`, 748k pares cruza-equipo), y mapa de aristas top-k
+     (`plot_team_similarity_map.py`). Helper compartido `scripts/geo_team_resolve.py`
+     (resuelve tus nombres de equipo **en español** → geo por ISO3).
+- **Hallazgo (te interesa para la vitrina)**: distancia **y** colonialidad explican parte del
+  parecido facial, cada una con peso propio. FIFA-48: Mantel facial-vs-distancia r=−0.20
+  (p=0.003); parcial `facial~colonial|distancia`=**+0.16** — y con tu dataset FIFA ese efecto
+  colonial es mucho más nítido que con Transfermarkt (+0.05): la estandarización de las fotos
+  destapó la señal. Aristas cruza-región top: bloque árabe Egipto–Jordania–Irak (colonial UK),
+  Curazao↔Cabo Verde (atlántico afro-criollo). Estas viz podrían ser una solapa "factores"
+  en el viewer de vitrina si te sirve.
+- **Usé tu payload tal cual** (1236 jugadores / 48 equipos), NO recalculé embeddings. Instalé
+  `matplotlib`/`scipy`/`openpyxl` en `face-sim` (las dos primeras ya estaban).
+- **Ojo con**: (1) COLDAT solo cubre colonización europea de ultramar → 8 selecciones WC sin
+  colonizador (Austria, Bosnia, Croacia, Chequia, Noruega, Suecia, Suiza, Curazao): faltan
+  imperios terrestres (otomano/ruso-soviético). (2) Inglaterra+Escocia colapsan en UK/Londres
+  en la data de capitales soberanas. (3) Los outputs geo y el basemap son gitignored.
+- **Archivos míos de esta tanda** (para commitear con paths explícitos):
+  `scripts/build_capitals_distance_matrix.py`, `scripts/geo_team_resolve.py`,
+  `scripts/plot_team_similarity_vs_geo.py`, `scripts/plot_player_similarity_vs_geo.py`,
+  `scripts/plot_team_similarity_map.py` + el bloque DEVLOG marcado `(commit pendiente)`.
+
+## 2026-06-26 · [codex] · Vitrina FIFA: QC 1236/1248 + payload/heatmaps + viewer
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: retomé el track de vitrina usando el manifiesto FIFA oficial dejado por
+  Claude. Adapté `scripts/qc_transfermarkt_headshots.py` (sigue sin trackear) para
+  aceptar también el schema anidado `phyloface-fifa-official-headshot-manifest-v0.1`,
+  aplanar `teams[].players[]`, derivar `local_image` de la descarga local y conservar
+  metadatos FIFA/licencia. Robustecí `src/phyloface/core/detector.py` con `det_thresh`
+  real en `FaceAnalysis.prepare()` y fallback PIL para leer imágenes que OpenCV no
+  decodifica (las descargas FIFA están guardadas como `.png` pero son AVIF).
+- **Resultado**: QC completo sobre
+  `data/output/teams/manifest_fifa_northamerica2026_official.json` con
+  `--include-embeddings --det-thresh 0.20 --min-bbox-area-ratio 0.01` →
+  `data/output/teams/manifest_fifa_northamerica2026_official_qc.json`.
+  Aceptadas **1236/1248**, rechazadas **12** por `not_exactly_one_face` (secundarias
+  pequeñas: Kotarski, Ryan Mendes, Jose Sa, Wan-Bissaka, Jo Hyeonwoo, Lindelof,
+  Ricardo Rodriguez, Eren Elmali, Gimenez, Darwin Nunez, Mathias Olivera, Rodrigo
+  Aguirre). Generé
+  `data/output/teams/vitrina_fifa_northamerica2026_similarity_pilot.json`:
+  **1236 jugadores, 48 selecciones**, conteos por equipo 22-26. Heatmaps R en
+  `data/output/teams/r_heatmaps_fifa/` (40 archivos; mean/median/top3/top5 x métodos).
+  Después ajusté `_meta/vitrina_pilot_viewer.html` para elegir dataset local
+  (`fifa` por defecto, `transfermarkt` opcional vía selector o `?dataset=...`) y
+  verifiqué con Chrome headless que carga `FIFA oficial · 1236 jugadores · 48 selecciones`.
+- **Update UMAP/t-SNE**: agregué `scripts/build_vitrina_embedding_projection.py`
+  (sin trackear todavía) y generé
+  `data/output/teams/vitrina_fifa_northamerica2026_projection_tsne.json` (508 KB):
+  t-SNE sklearn, métrica coseno, `perplexity=35`, `random_state=42`, PCA previa 50
+  componentes (varianza explicada acumulada ~0.421). Integré el viewer gitignored con
+  una solapa **Mapa jugadores**: puntos=jugadores, color=selección, rombos=centroides
+  por selección; filtro de selección y búsqueda atenúan/resaltan puntos.
+- **Update mapa jugadores**: para reducir ruido visual, agregué un panel lateral en
+  `_meta/vitrina_pilot_viewer.html` con checkboxes por selección y picker de color.
+  Solo las selecciones marcadas se colorean; las demás quedan como puntos grises
+  tenues. Botones `Todas` / `Ninguna`. Validado: sintaxis JS OK con Node, HTTP 200
+  del viewer y del JSON de proyección en el servidor local.
+- **Update radios de dispersión**: en la misma solapa agregué toggles `Puntos`,
+  `Centroides` y `Radios`. Por defecto quedan puntos apagados, centroides+radios
+  encendidos. Los radios son círculos RMS en coordenadas de pantalla alrededor del
+  centroide de cada selección marcada, usando el mismo color del checkbox/picker.
+  Headless Chrome renderizó el viewer sin errores JS.
+- **Update radio intra directo**: a pedido del usuario, distinguí `Radio mapa`
+  (dispersión RMS en t-SNE) de `Radio intra` (línea punteada, derivada de
+  `payload.intra_team_stats`: radio inversamente proporcional a la mediana de
+  cosenos intraequipo; más grande = menor homogeneidad directa). Validado con Node
+  y Chrome headless.
+- **Update escala/tabla intra**: normalicé el `Radio intra` por min/max global de
+  la mediana intraequipo: máxima homogeneidad = radio mínimo intenso en el centroide;
+  mínima homogeneidad = círculo punteado grande y tenue. Agregué columna de similitud
+  intra al panel lateral y botones de orden `Nombre` / `Similitud` asc/desc.
+  Ejemplo con FIFA: Corea mediana 0.1289 → radio 5 px; Ghana 0.0653 → ~79 px;
+  Alemania 0.0355 → ~114 px; Bélgica 0.0262 → 125 px. Validado con Node, HTTP 200
+  y Chrome headless.
+- **Update reducciones**: amplié `scripts/build_vitrina_embedding_projection.py`
+  para generar `pca`, `mds`, `isomap` y `spectral` además de `tsne` usando sklearn
+  local. Generé los JSON FIFA:
+  `vitrina_fifa_northamerica2026_projection_{pca,mds,isomap,spectral,tsne}.json`
+  (~507-515 KB c/u). Agregué solapa **Reducciones** al viewer con selector de técnica,
+  reutilizando colores/checkboxes de selecciones. PCA carga por defecto; las demás se
+  fetchean al seleccionarlas. Validado con py_compile, Node syntax OK, HTTP 200 y
+  Chrome headless.
+- **Update atracción kNN**: agregué `scripts/build_vitrina_knn_attraction.py`
+  (sin trackear todavía) para medir, sobre la matriz jugador-jugador original, hacia
+  qué otras selecciones apuntan los `k` vecinos externos más parecidos de cada jugador.
+  Generé `data/output/teams/vitrina_fifa_northamerica2026_knn_attraction_k8.json`
+  (**1236 jugadores, 48 selecciones, k=8**, ~2.5 MB) e integré la solapa
+  **Atracción kNN** en `_meta/vitrina_pilot_viewer.html`. La vista permite filtrar por
+  selección y lista destinos con proporción, conteo y score medio; no depende de la
+  geometría t-SNE/PCA/etc. Ejemplos observados: Ghana apunta a Senegal/Costa de
+  Marfil/Cabo Verde/Haití/RD Congo/Francia; Corea apunta muy fuerte a Japón; Japón
+  apunta fuerte a Corea. Validado con py_compile, Node syntax OK, HTTP 200 del JSON y
+  Chrome headless.
+- **Métricas rápidas**: off-diagonal FIFA `mean` min/max/std `0.0019/0.0773/0.0103`,
+  `median` `0.0014/0.0754/0.0100`, `top3_mean` `0.1500/0.3517/0.0354`,
+  `top5_mean` `0.1465/0.3321/0.0322`. Como con Transfermarkt, top-k separa mejor la
+  señal; mean/median se comprimen por planteles grandes.
+- **Ojo con**: fotos FIFA/Getty siguen `publication_ok=false`; no publicar caras ni
+  payload con `local_image`. El JSON de similitud pesa ~42 MB y el QC ~20 MB
+  (ambos en `data/`, gitignored). El QC corre en CPU en este shell; warnings de
+  Albumentations offline y provider CUDA ausente son esperables.
+
 ## 2026-06-26 · [claude] · Fotos OFICIALES FIFA de los 1248 jugadores (API v3) → manifiesto + Excel + descarga (commiteado)
 
 - **Rama / commits**: `main`. `43a39cb` (los 4 scripts FIFA) + el commit de docs de
