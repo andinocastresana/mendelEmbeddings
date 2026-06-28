@@ -58,6 +58,43 @@ Uso recomendado: fallback exploratorio local, no primera fuente publica.
 - Contras: procedencia/licencia suele ser opaca; puede servir para prototipar, pero
   es debil para una vitrina publica si no trae atribucion verificable.
 
+## Giro de criterio 2026-05-27: primero estandarizacion visual
+
+Para la etapa de comparacion facial, se priorizan las fotos mas estandarizadas
+aunque todavia no sean publicables. El criterio es: retrato frontal o semi-frontal,
+una sola persona, cabeza completa, encuadre repetible entre jugadores, fondo simple,
+resolucion suficiente y poca expresion/pose extrema.
+
+Esto separa dos decisiones:
+
+- **Dataset de trabajo / comparacion**: puede usar fuentes no resueltas legalmente,
+  siempre marcadas como `UNREVIEWED_NONPUBLIC_RESEARCH` y sin publicarlas.
+- **Dataset publicable / vitrina externa**: solo imagenes con licencia/permiso y
+  atribucion resueltos.
+
+Prioridad tecnica actual:
+
+1. **Transfermarkt profile portraits**: fuente candidata #1 para comparar por
+   estandarizacion. Transfermarkt documenta criterios de perfil cercanos a lo que
+   necesitamos (cabeza visible, resolucion minima, sin logos tapando, sin otras
+   personas). Nuevo extractor:
+
+   ```bash
+   python scripts/build_transfermarkt_headshot_manifest.py \
+     --input data/output/teams/manifest_wikimedia_northamerica2026_all_max8_downloaded.json \
+     --output data/output/teams/manifest_transfermarkt_northamerica2026_headshots.json \
+     --download-images
+   ```
+
+   Todo queda marcado como no publicable hasta revisar permisos/licencia.
+
+2. **FIFA / federaciones / clubes**: si aparece roster final con headshots
+   oficiales, pueden superar a Transfermarkt en consistencia por torneo/equipo.
+   Por ahora se tratan como fuente candidata a investigar, no como base automatica.
+
+3. **Wikimedia/Commons/Wikipedia page images**: buena para trazabilidad/publicacion,
+   pero visualmente irregular; queda como fallback publicable y fuente de cobertura.
+
 ## Decision inicial
 
 Arrancar por 2026 y Wikimedia/Wikidata, construyendo primero un manifiesto JSON con:

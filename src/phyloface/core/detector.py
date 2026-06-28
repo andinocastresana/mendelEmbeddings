@@ -21,12 +21,14 @@ class FaceDetector:
         library_name: str = "insightface",
         model_name: str = "buffalo_l",
         det_size: tuple[int, int] = (640, 640),
+        det_thresh: float = 0.5,
         ctx_id: int = -1,
         max_faces: int = 11,
     ):
         self.library_name = library_name
         self.model_name = model_name
         self.det_size = det_size
+        self.det_thresh = det_thresh
         self.ctx_id = ctx_id
         self.max_faces = max_faces
 
@@ -34,7 +36,7 @@ class FaceDetector:
             from insightface.app import FaceAnalysis
 
             self.app = FaceAnalysis(name=model_name)
-            self.app.prepare(ctx_id=ctx_id, det_size=det_size)
+            self.app.prepare(ctx_id=ctx_id, det_size=det_size, det_thresh=det_thresh)
         else:
             raise ValueError(
                 f"Backend no soportado: {library_name}. "
@@ -55,6 +57,25 @@ class FaceDetector:
                 md5.update(chunk)
         return md5.hexdigest()
 
+    @staticmethod
+    def read_image_bgr(image_path: Path) -> np.ndarray:
+        img = cv2.imread(str(image_path))
+        if img is not None:
+            return img
+
+        try:
+            from PIL import Image
+        except ImportError as exc:
+            raise ValueError(f"No se pudo leer la imagen: {image_path}") from exc
+
+        try:
+            with Image.open(image_path) as pil_image:
+                rgb = np.asarray(pil_image.convert("RGB"))
+        except Exception as exc:
+            raise ValueError(f"No se pudo leer la imagen: {image_path}") from exc
+
+        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
     def extract_faces_payload(
         self,
         image_path: Path,
@@ -63,9 +84,7 @@ class FaceDetector:
         """
         Devuelve todo lo calculado para una imagen, listo para cachear.
         """
-        img = cv2.imread(str(image_path))
-        if img is None:
-            raise ValueError(f"No se pudo leer la imagen: {image_path}")
+        img = self.read_image_bgr(image_path)
 
         faces = self.app.get(img)
         if len(faces) == 0:
@@ -149,4 +168,3 @@ class FaceDetector:
         }
 
         return payload
-

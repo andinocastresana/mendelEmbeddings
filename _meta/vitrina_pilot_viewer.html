@@ -1,0 +1,3250 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vitrina 2026 - piloto</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dde6;
+      --text: #17202a;
+      --muted: #667085;
+      --accent: #0f766e;
+      --accent-2: #b42318;
+      --cell: #e8f3f1;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+      padding: 18px 24px 14px;
+      background: rgba(246, 247, 249, 0.95);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    select,
+    input {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: white;
+      padding: 0 10px;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    input { width: 220px; }
+
+    main {
+      padding: 18px 24px 28px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-bottom: 0;
+      border-radius: 8px 8px 0 0;
+      background: #edf1f5;
+      color: var(--muted);
+      padding: 0 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 700;
+      transform: translateY(1px);
+    }
+
+    .tab-panel[hidden] {
+      display: none;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .metric,
+    .panel,
+    .player,
+    .pair {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .metric {
+      padding: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .panel-note {
+      padding: 8px 14px 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .method-note {
+      margin: 0 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .method-note summary {
+      cursor: pointer;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 750;
+      background: #f8fafc;
+    }
+
+    .method-note-body {
+      display: grid;
+      gap: 8px;
+      padding: 10px 14px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .method-note-body p {
+      margin: 0;
+    }
+
+    .method-note-body ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .help {
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      margin-left: 4px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: help;
+    }
+
+    .matrix-wrap {
+      overflow: auto;
+      max-height: 560px;
+    }
+
+    .cluster-wrap {
+      overflow: auto;
+      max-height: 720px;
+      padding: 12px;
+    }
+
+    .cluster-figure {
+      --cell: 18px;
+      --dendro: 132px;
+      --labels: 176px;
+      display: grid;
+      grid-template-columns: var(--dendro) calc(var(--n) * var(--cell)) var(--labels);
+      grid-template-rows: var(--dendro) calc(var(--n) * var(--cell)) var(--labels);
+      grid-template-areas:
+        "corner top topgap"
+        "left heat rows"
+        "bottomgap cols colsgap";
+      width: max-content;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .cluster-corner {
+      grid-area: corner;
+      display: flex;
+      align-items: end;
+      justify-content: end;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 0 8px 8px 0;
+    }
+
+    .dendro-top {
+      grid-area: top;
+      width: calc(var(--n) * var(--cell));
+      height: var(--dendro);
+      overflow: visible;
+    }
+
+    .dendro-left {
+      grid-area: left;
+      width: var(--dendro);
+      height: calc(var(--n) * var(--cell));
+      overflow: visible;
+    }
+
+    .dendro-path {
+      stroke: #344054;
+      stroke-width: 1.4;
+      fill: none;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .heatmap-grid {
+      grid-area: heat;
+      display: grid;
+      grid-template-columns: repeat(var(--n), var(--cell));
+      grid-template-rows: repeat(var(--n), var(--cell));
+      width: calc(var(--n) * var(--cell));
+      height: calc(var(--n) * var(--cell));
+      border-left: 1px solid #d0d5dd;
+      border-top: 1px solid #d0d5dd;
+    }
+
+    .cluster-cell {
+      display: grid;
+      place-items: center;
+      border-right: 1px solid rgba(255, 255, 255, 0.55);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+      color: rgba(23, 32, 42, 0);
+      font-size: 8px;
+      line-height: 1;
+    }
+
+    .cluster-cell.diagonal {
+      box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.28);
+      background: #eef1f5 !important;
+      color: rgba(23, 32, 42, 0);
+    }
+
+    .cluster-cell:hover {
+      outline: 2px solid #111827;
+      outline-offset: -2px;
+      color: #111827;
+      font-weight: 800;
+    }
+
+    .cluster-row-labels {
+      grid-area: rows;
+      display: grid;
+      grid-template-rows: repeat(var(--n), var(--cell));
+      height: calc(var(--n) * var(--cell));
+      padding-left: 8px;
+    }
+
+    .cluster-row-label {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .cluster-col-labels {
+      grid-area: cols;
+      display: grid;
+      grid-template-columns: repeat(var(--n), var(--cell));
+      width: calc(var(--n) * var(--cell));
+      padding-top: 8px;
+    }
+
+    .cluster-col-label {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: visible;
+      justify-self: center;
+    }
+
+    .distance-axis {
+      stroke: #98a2b3;
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 0 14px 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-bar {
+      width: 180px;
+      height: 10px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      background: linear-gradient(90deg, hsl(250 72% 36%), hsl(198 88% 48%), hsl(52 96% 56%), hsl(8 86% 54%));
+    }
+
+    .graph-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 14px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .graph-controls label {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .graph-controls input[type="range"] {
+      width: 150px;
+      padding: 0;
+    }
+
+    .graph-wrap {
+      padding: 12px 14px 16px;
+      overflow: auto;
+    }
+
+    .community-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 12px;
+      padding: 12px 14px 16px;
+      align-items: start;
+    }
+
+    .community-main,
+    .community-side {
+      display: grid;
+      gap: 12px;
+    }
+
+    .community-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .community-card h3 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .community-card-body {
+      display: grid;
+      gap: 8px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .community-bars {
+      display: grid;
+      gap: 6px;
+    }
+
+    .community-bar {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr) 42px;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .community-bar span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .community-bar-track {
+      height: 8px;
+      border-radius: 99px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+
+    .community-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--accent);
+    }
+
+    .community-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .community-stat {
+      border: 1px solid #e6e9ef;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfd;
+    }
+
+    .community-stat strong {
+      display: block;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .community-stat span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .community-map-svg {
+      width: 100%;
+      min-width: 760px;
+      height: 520px;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(#ffffffd9, #ffffffd9),
+        linear-gradient(90deg, rgba(152, 162, 179, 0.16) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(152, 162, 179, 0.16) 1px, transparent 1px);
+      background-size: auto, 52px 52px, 52px 52px;
+    }
+
+    .community-map-wrap {
+      overflow: auto;
+    }
+
+    .community-team-picker {
+      display: grid;
+      gap: 5px;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .community-team-picker label {
+      display: grid;
+      grid-template-columns: 16px 18px minmax(0, 1fr) auto;
+      gap: 7px;
+      align-items: center;
+      min-height: 28px;
+      font-size: 12px;
+    }
+
+    .community-team-picker input {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+    }
+
+    .community-filter-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .community-team-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(17, 24, 39, 0.28);
+    }
+
+    .community-filter-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .community-player-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 8px;
+      max-height: 430px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .community-player {
+      border: 1px solid #e6e9ef;
+      border-radius: 8px;
+      background: #fbfcfd;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .community-player img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: #eef1f5;
+    }
+
+    .community-player div {
+      display: grid;
+      gap: 2px;
+      padding: 6px;
+      font-size: 11px;
+      line-height: 1.15;
+    }
+
+    .community-player strong,
+    .community-player span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .community-player span {
+      color: var(--muted);
+    }
+
+    .projection-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 14px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .projection-controls label {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .projection-controls input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+    }
+
+    .projection-wrap {
+      padding: 12px 14px 16px;
+      overflow: auto;
+    }
+
+    .projection-layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px 14px 16px;
+      align-items: start;
+    }
+
+    .projection-side {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+      overflow: hidden;
+    }
+
+    .projection-side-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .projection-side-actions button {
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+
+    .projection-team-list {
+      display: grid;
+      max-height: 600px;
+      overflow: auto;
+    }
+
+    .projection-team-row {
+      display: grid;
+      grid-template-columns: 18px 28px minmax(0, 1fr) 58px auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 34px;
+      padding: 5px 10px;
+      border-bottom: 1px solid #eef1f4;
+      font-size: 12px;
+    }
+
+    .projection-team-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+    }
+
+    .projection-team-row input[type="color"] {
+      width: 28px;
+      height: 24px;
+      padding: 1px;
+      border-radius: 5px;
+    }
+
+    .projection-team-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .projection-team-count {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .projection-team-score {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .projection-canvas {
+      min-width: 0;
+      overflow: auto;
+    }
+
+    .projection-svg {
+      width: 100%;
+      min-width: 980px;
+      height: 680px;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(#ffffffd9, #ffffffd9),
+        linear-gradient(90deg, rgba(152, 162, 179, 0.18) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(152, 162, 179, 0.18) 1px, transparent 1px);
+      background-size: auto, 56px 56px, 56px 56px;
+    }
+
+    .projection-point {
+      stroke: rgba(17, 24, 39, 0.42);
+      stroke-width: 0.7;
+      cursor: default;
+    }
+
+    .projection-point.dimmed {
+      opacity: 0.16;
+      stroke-width: 0.2;
+    }
+
+    .projection-point.focused {
+      stroke: #111827;
+      stroke-width: 1.5;
+    }
+
+    .projection-radius {
+      fill-opacity: 0.1;
+      stroke-width: 2;
+      stroke-opacity: 0.78;
+    }
+
+    .projection-intra-radius {
+      stroke-width: 2.2;
+      stroke-dasharray: 7 5;
+    }
+
+    .projection-centroid {
+      fill: #fff;
+      stroke: #111827;
+      stroke-width: 1.6;
+      paint-order: stroke;
+    }
+
+    .projection-label {
+      fill: #111827;
+      font-size: 10px;
+      font-weight: 800;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 3px;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .graph-svg {
+      width: 100%;
+      min-width: 980px;
+      height: 680px;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(#ffffffcc, #ffffffcc),
+        radial-gradient(circle at 20% 20%, #eef6f8, transparent 38%),
+        radial-gradient(circle at 80% 70%, #f7f2e7, transparent 40%);
+    }
+
+    .graph-edge {
+      stroke: #2563eb;
+      stroke-linecap: round;
+      opacity: 0.48;
+    }
+
+    .graph-node {
+      fill: #fff;
+      stroke: #111827;
+      stroke-width: 1.2;
+      cursor: default;
+    }
+
+    .graph-label {
+      fill: #111827;
+      font-size: 11px;
+      font-weight: 700;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 3px;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .graph-score {
+      fill: #475467;
+      font-size: 9px;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 3px;
+      pointer-events: none;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: max-content;
+      min-width: 100%;
+      font-size: 11px;
+    }
+
+    th,
+    td {
+      border: 1px solid #e6e9ef;
+      padding: 5px 7px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f9fafb;
+      z-index: 1;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    th:first-child {
+      left: 0;
+      z-index: 2;
+      text-align: left;
+    }
+
+    td:first-child {
+      position: sticky;
+      left: 0;
+      background: #fff;
+      text-align: left;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .matrix-cell {
+      cursor: pointer;
+    }
+
+    .matrix-cell:hover {
+      outline: 2px solid #111827;
+      outline-offset: -2px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .modal {
+      width: min(1180px, 96vw);
+      max-height: 90vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.24);
+      overflow: hidden;
+    }
+
+    .modal-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-head h2 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    .modal-sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .modal-close {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .modal-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f9fafb;
+    }
+
+    .mini-stat strong {
+      display: block;
+      font-size: 16px;
+    }
+
+    .mini-stat span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .player-heatmap-wrap {
+      overflow: auto;
+      padding: 14px 16px 18px;
+    }
+
+    .player-heatmap {
+      display: grid;
+      grid-template-columns: 178px repeat(var(--cols), 74px);
+      grid-auto-rows: 58px;
+      width: max-content;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .player-corner,
+    .player-col,
+    .player-row,
+    .player-cell {
+      border-right: 1px solid #eef1f4;
+      border-bottom: 1px solid #eef1f4;
+    }
+
+    .player-corner,
+    .player-col {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #fff;
+    }
+
+    .player-corner {
+      left: 0;
+      z-index: 4;
+      display: flex;
+      align-items: end;
+      padding: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .player-col {
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      padding: 6px 4px;
+      color: var(--text);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.05;
+      text-align: center;
+    }
+
+    .player-row {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      background: #fff;
+      padding: 6px 8px;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .player-cell {
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: #111827;
+    }
+
+    .pairs {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      max-height: 560px;
+      overflow: auto;
+    }
+
+    .pair {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 10px;
+      padding: 9px;
+      align-items: center;
+    }
+
+    .score {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: var(--cell);
+      color: #064e45;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .pair-names {
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+    }
+
+    .pair-names span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .players {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .player {
+      overflow: hidden;
+      min-height: 236px;
+    }
+
+    .player img {
+      width: 100%;
+      aspect-ratio: 3 / 3.9;
+      object-fit: cover;
+      display: block;
+      background: #eef1f5;
+    }
+
+    .player-body {
+      padding: 9px;
+      display: grid;
+      gap: 3px;
+      font-size: 13px;
+    }
+
+    .player-body strong {
+      line-height: 1.25;
+    }
+
+    .player-body span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .notice {
+      color: var(--accent-2);
+      font-size: 12px;
+      padding: 0 14px 12px;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        justify-content: start;
+      }
+
+      .metrics,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      input {
+        width: min(100%, 260px);
+      }
+
+      .projection-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .community-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Vitrina Mundial 2026 - piloto</h1>
+      <div class="sub" id="subtitle">Cargando payload local...</div>
+    </div>
+    <div class="controls">
+      <select id="datasetMode" title="Dataset local">
+        <option value="fifa">FIFA oficial</option>
+        <option value="transfermarkt">Transfermarkt</option>
+      </select>
+      <select id="aggregationMode" title="Agregacion pais-vs-pais">
+        <option value="mean">Promedio</option>
+        <option value="median">Mediana</option>
+        <option value="top3_mean">Top 3 promedio</option>
+        <option value="top5_mean">Top 5 promedio</option>
+      </select>
+      <select id="teamFilter"></select>
+      <input id="search" type="search" placeholder="Buscar jugador">
+    </div>
+  </header>
+
+  <main>
+    <section class="metrics" id="metrics"></section>
+
+    <nav class="tabs" aria-label="Vistas de matriz">
+      <button class="tab active" type="button" data-tab="overview">Matriz original</button>
+      <button class="tab" type="button" data-tab="cluster">Heatmap clusterizado</button>
+      <button class="tab" type="button" data-tab="graph">Grafo</button>
+      <button class="tab" type="button" data-tab="communities">Comunidades</button>
+      <button class="tab" type="button" data-tab="playerHierarchy">Jerárquico jugadores</button>
+      <button class="tab" type="button" data-tab="projection">Mapa jugadores</button>
+      <button class="tab" type="button" data-tab="reductions">Reducciones</button>
+      <button class="tab" type="button" data-tab="attraction">Atracción kNN</button>
+    </nav>
+
+    <section class="tab-panel" id="tab-overview">
+      <details class="method-note">
+        <summary>Que muestra esta solapa y como leer la metrica base</summary>
+        <div class="method-note-body">
+          <p>Esta es la vista base de la vitrina: cada jugador aceptado por QC tiene un embedding facial ArcFace y la similitud entre dos jugadores es el coseno entre embeddings. Una celda seleccion-vs-seleccion resume todos los pares de jugadores entre ambas selecciones.</p>
+          <p>El selector superior cambia la agregacion: promedio, mediana, promedio de los 3 pares mas parecidos o promedio de los 5 pares mas parecidos. Las solapas siguientes reutilizan esta misma matriz cuando hablan de similitud entre selecciones.</p>
+          <ul>
+            <li>Ventaja: es directa, auditable y permite abrir cualquier celda para ver jugador-vs-jugador.</li>
+            <li>Desventaja: promedio y mediana pueden comprimir mucho la senal; top-k destaca parecidos fuertes pero puede sobre-representar pocos jugadores.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="grid">
+        <div class="panel">
+          <h2>Matriz seleccion vs seleccion</h2>
+          <div class="panel-note" id="metricNote">
+            Métrica original: similitud promedio entre selecciones
+            <span class="help" title="Para cada par de selecciones se calcula el coseno ArcFace entre todos los jugadores aceptados por QC de ambos países, y la celda muestra el promedio de esos scores. En la diagonal se promedian los pares internos de una misma selección, excluyendo jugador contra sí mismo.">?</span>
+          </div>
+          <div class="matrix-wrap" id="matrix"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Top pares cruzados</h2>
+          <div class="pairs" id="pairs"></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-cluster" hidden>
+      <details class="method-note">
+        <summary>Que muestra esta solapa y que significa el dendrograma</summary>
+        <div class="method-note-body">
+          <p>Reordena la matriz de la solapa Matriz original con clustering aglomerativo sobre distancia = 1 - similitud. El dendrograma no cambia los scores: solo ordena selecciones parecidas cerca para que emerjan bloques visuales.</p>
+          <p>Las alturas del dendrograma estan normalizadas visualmente para magnificar diferencias pequenas; por eso sirven para lectura relativa, no como escala metrica exacta.</p>
+          <ul>
+            <li>Ventaja: buena lectura global de bloques seleccion-vs-seleccion.</li>
+            <li>Desventaja: fuerza una jerarquia unica aunque los jugadores de una misma seleccion puedan pertenecer a subgrupos distintos.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Heatmap clusterizado por similitud promedio</h2>
+        <div class="panel-note" id="clusterMetricNote"></div>
+        <div class="legend">
+          <span>min escalado</span>
+          <div class="legend-bar"></div>
+          <span>max escalado</span>
+          <span id="clusterScaleLabel"></span>
+        </div>
+        <div class="cluster-wrap" id="clusterHeatmap"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-graph" hidden>
+      <details class="method-note">
+        <summary>Que muestra esta solapa y cuando usar kNN o threshold</summary>
+        <div class="method-note-body">
+          <p>Transforma la matriz seleccion-vs-seleccion explicada en Matriz original en un grafo: nodos = selecciones, aristas = similitudes altas. El modo kNN conserva las k conexiones mas cercanas por seleccion; threshold conserva todas las conexiones por encima de un percentil global.</p>
+          <ul>
+            <li>kNN evita que selecciones aisladas desaparezcan, pero puede incluir aristas debiles.</li>
+            <li>Threshold muestra solo enlaces fuertes, pero puede dejar nodos con pocas conexiones.</li>
+            <li>El layout es una simulacion de fuerzas simple para inspeccion local, no una prueba estadistica.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Grafo de similitud entre selecciones</h2>
+        <div class="panel-note" id="graphMetricNote"></div>
+        <div class="graph-controls">
+          <label>
+            Modo
+            <select id="graphMode">
+              <option value="knn">kNN</option>
+              <option value="threshold">Threshold</option>
+            </select>
+          </label>
+          <label id="graphKControl">
+            k
+            <input id="graphK" type="range" min="1" max="8" value="3">
+            <span id="graphKValue">3</span>
+          </label>
+          <label id="graphThresholdControl">
+            percentil
+            <input id="graphThreshold" type="range" min="70" max="99" value="90">
+            <span id="graphThresholdValue">90</span>
+          </label>
+          <span id="graphSummary"></span>
+        </div>
+        <div class="graph-wrap" id="graphView"></div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-communities" hidden>
+      <details class="method-note">
+        <summary>Que muestra esta solapa y por que no es otra proyeccion 2D</summary>
+        <div class="method-note-body">
+          <p>Esta solapa trabaja en nivel jugador-jugador, usando la matriz completa de similitud original. Busca subgrupos latentes que pueden cruzar selecciones, justamente el problema donde t-SNE/UMAP tienden a dispersar elementos de una misma entidad.</p>
+          <p>Los metodos disponibles comparan comunidades kNN, clustering aglomerativo, spectral clustering y un grafo multiplex que suma una arista blanda por pertenencia a la misma seleccion. Los valores de similitud vienen de la Matriz original, pero aqui el resumen es por clusters de jugadores, no por celda seleccion-vs-seleccion.</p>
+          <ul>
+            <li>Ventaja: permite ver si las selecciones se parten en subgrupos transversales.</li>
+            <li>Desventaja: las comunidades dependen de k, numero de clusters o beta multiplex; hay que compararlas como hipotesis, no como verdad unica.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Comunidades y fragmentacion</h2>
+        <div class="panel-note" id="communitiesMetricNote"></div>
+        <div class="graph-controls">
+          <label>
+            Metodo
+            <select id="communityMethod"></select>
+          </label>
+          <label>
+            Color mapa
+            <select id="communityColorMode">
+              <option value="cluster">Cluster</option>
+              <option value="team">Selección</option>
+            </select>
+          </label>
+          <span id="communitySummary"></span>
+        </div>
+        <div class="community-layout">
+          <div class="community-main" id="communityMain"></div>
+          <aside class="community-side" id="communitySide"></aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-playerHierarchy" hidden>
+      <details class="method-note">
+        <summary>Que muestra esta solapa y por que usa canvas</summary>
+        <div class="method-note-body">
+          <p>Ordena jugadores individuales con clustering jerarquico sobre distancia = 1 - coseno. El heatmap muestra similitud jugador-vs-jugador reordenada por el dendrograma; los colores laterales ayudan a leer seleccion y cluster.</p>
+          <p>El mapa completo de 1236 jugadores seria demasiado grande para DOM/SVG. Por eso esta primera version usa subconjuntos precomputados y pinta el heatmap en canvas.</p>
+          <ul>
+            <li>Ventaja: permite ver ramas y subestructura sin fijar un numero de clusters.</li>
+            <li>Desventaja: la vista depende del subconjunto elegido y no muestra todavia el dendrograma dibujado completo.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Heatmap jerarquico jugador-jugador</h2>
+        <div class="panel-note" id="playerHierarchyNote"></div>
+        <div class="graph-controls">
+          <label>
+            Subconjunto
+            <select id="playerHierarchySubset"></select>
+          </label>
+          <span id="playerHierarchySummary"></span>
+        </div>
+        <div class="community-layout">
+          <div class="community-main">
+            <div class="community-card">
+              <h3>Heatmap ordenado</h3>
+              <div class="community-card-body">
+                <div class="community-map-wrap">
+                  <canvas id="playerHierarchyCanvas" width="900" height="900" style="max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside class="community-side" id="playerHierarchySide"></aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-projection" hidden>
+      <details class="method-note">
+        <summary>Que muestra esta solapa y que no debe inferirse</summary>
+        <div class="method-note-body">
+          <p>Proyecta cada embedding de jugador a 2D para inspeccion visual. Los puntos usan una reduccion dimensional; los centroides y radios ayudan a comparar dispersion por seleccion. El radio intra punteado no viene del mapa: reutiliza la mediana de cosenos internos de la Matriz original.</p>
+          <ul>
+            <li>Ventaja: es intuitiva para explorar jugadores y selecciones marcadas.</li>
+            <li>Desventaja: la geometria 2D distorsiona distancias; cercania visual no reemplaza los scores originales ni las comunidades.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Mapa 2D de jugadores</h2>
+        <div class="panel-note" id="projectionMetricNote"></div>
+        <div class="projection-controls">
+          <label><input id="projectionShowPoints" type="checkbox"> Puntos</label>
+          <label><input id="projectionShowCentroids" type="checkbox" checked> Centroides</label>
+          <label><input id="projectionShowRadii" type="checkbox" checked> Radio mapa</label>
+          <label><input id="projectionShowIntraRadii" type="checkbox" checked> Radio intra</label>
+          <span id="projectionSummary"></span>
+        </div>
+        <div class="projection-layout">
+          <aside class="projection-side" aria-label="Selecciones en el mapa">
+            <div class="projection-side-actions">
+              <button type="button" id="projectionSelectAll">Todas</button>
+              <button type="button" id="projectionSelectNone">Ninguna</button>
+              <button type="button" id="projectionSortName">Nombre ↑</button>
+              <button type="button" id="projectionSortIntra">Similitud ↓</button>
+            </div>
+            <div class="projection-team-list" id="projectionTeamList"></div>
+          </aside>
+          <div class="projection-canvas" id="projectionView"></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-reductions" hidden>
+      <details class="method-note">
+        <summary>Que compara esta solapa entre PCA, MDS, Isomap, Spectral y t-SNE</summary>
+        <div class="method-note-body">
+          <p>Compara distintas reducciones 2D sobre los mismos embeddings de jugadores. PCA prioriza varianza lineal global; MDS intenta preservar distancias; Isomap usa vecindarios en una variedad; Spectral usa el grafo de vecinos; t-SNE enfatiza vecindarios locales.</p>
+          <p>Usa los mismos filtros y colores del Mapa jugadores. Para interpretar similitud cuantitativa, volver a Matriz original, Atraccion kNN o Comunidades.</p>
+          <ul>
+            <li>Ventaja: permite ver si un patron es estable entre metodos.</li>
+            <li>Desventaja: si un patron aparece solo en una tecnica puede ser artefacto de la reduccion.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Otras reducciones de dimensionalidad</h2>
+        <div class="panel-note" id="reductionMetricNote"></div>
+        <div class="projection-controls">
+          <label>
+            Técnica
+            <select id="reductionMethod">
+              <option value="pca">PCA</option>
+              <option value="mds">MDS</option>
+              <option value="isomap">Isomap</option>
+              <option value="spectral">Spectral</option>
+              <option value="tsne">t-SNE</option>
+            </select>
+          </label>
+          <span id="reductionSummary"></span>
+        </div>
+        <div class="projection-layout">
+          <aside class="projection-side" aria-label="Selecciones en reducciones">
+            <div class="projection-side-actions">
+              <button type="button" id="reductionSelectAll">Todas</button>
+              <button type="button" id="reductionSelectNone">Ninguna</button>
+            </div>
+            <div class="projection-team-list" id="reductionTeamList"></div>
+          </aside>
+          <div class="projection-canvas" id="reductionView"></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-attraction" hidden>
+      <details class="method-note">
+        <summary>Que mide la atraccion kNN externa</summary>
+        <div class="method-note-body">
+          <p>Para cada jugador se buscan sus k vecinos mas parecidos excluyendo jugadores de su propia seleccion. Luego se agregan esos destinos por seleccion: proporcion de vecinos, conteo y score medio.</p>
+          <p>Esta vista usa la misma similitud jugador-jugador de la Matriz original, pero evita depender de una proyeccion 2D. Es una lectura direccional: Ghana -> Senegal no tiene por que ser identico a Senegal -> Ghana.</p>
+          <ul>
+            <li>Ventaja: muestra puentes externos concretos y es robusta frente a distorsiones del mapa.</li>
+            <li>Desventaja: depende del k elegido y puede amplificar equipos con perfiles internos heterogeneos.</li>
+          </ul>
+        </div>
+      </details>
+      <section class="panel">
+        <h2>Atracción externa kNN</h2>
+        <div class="panel-note" id="attractionMetricNote"></div>
+        <div class="projection-controls">
+          <label>
+            Selección
+            <select id="attractionTeamFilter"></select>
+          </label>
+          <span id="attractionSummary"></span>
+        </div>
+        <div class="pairs" id="attractionView"></div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <h2>Jugadores aceptados por QC</h2>
+      <div class="notice" id="datasetNotice">Dataset local de trabajo: no publicar ni redistribuir imagenes.</div>
+      <div class="players" id="players"></div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="pairModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pairModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="pairModalTitle">Comparacion individual</h2>
+          <div class="modal-sub" id="pairModalSubtitle"></div>
+        </div>
+        <button class="modal-close" type="button" id="pairModalClose" aria-label="Cerrar">x</button>
+      </div>
+      <div class="modal-summary" id="pairModalSummary"></div>
+      <div class="player-heatmap-wrap" id="pairModalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    const DATASETS = {
+      fifa: {
+        label: 'FIFA oficial',
+        payloadUrl: '/data/output/teams/vitrina_fifa_northamerica2026_similarity_pilot.json',
+        projectionUrl: '/data/output/teams/vitrina_fifa_northamerica2026_projection_tsne.json',
+        reductionUrls: {
+          tsne: '/data/output/teams/vitrina_fifa_northamerica2026_projection_tsne.json',
+          pca: '/data/output/teams/vitrina_fifa_northamerica2026_projection_pca.json',
+          mds: '/data/output/teams/vitrina_fifa_northamerica2026_projection_mds.json',
+          isomap: '/data/output/teams/vitrina_fifa_northamerica2026_projection_isomap.json',
+          spectral: '/data/output/teams/vitrina_fifa_northamerica2026_projection_spectral.json',
+        },
+        attractionUrl: '/data/output/teams/vitrina_fifa_northamerica2026_knn_attraction_k8.json',
+        clusterUrl: '/data/output/teams/vitrina_fifa_northamerica2026_cluster_exploration.json',
+        playerHierarchyUrl: '/data/output/teams/vitrina_fifa_northamerica2026_player_hierarchy.json',
+        notice: 'Dataset local de trabajo: fotos FIFA/Getty, no publicar ni redistribuir imagenes ni rutas locales.',
+      },
+      transfermarkt: {
+        label: 'Transfermarkt',
+        payloadUrl: '/data/output/teams/vitrina_transfermarkt_northamerica2026_similarity_pilot.json',
+        projectionUrl: '/data/output/teams/vitrina_transfermarkt_northamerica2026_projection_tsne.json',
+        reductionUrls: {},
+        attractionUrl: null,
+        clusterUrl: null,
+        playerHierarchyUrl: null,
+        notice: 'Dataset local de trabajo: no publicar ni redistribuir imagenes Transfermarkt ni rutas locales.',
+      },
+    };
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialDataset = DATASETS[urlParams.get('dataset')] ? urlParams.get('dataset') : 'fifa';
+    const state = {
+      payload: null,
+      projection: null,
+      reductions: new Map(),
+      attraction: null,
+      clusterExploration: null,
+      playerHierarchy: null,
+      playerHierarchySubsetIndex: 0,
+      communityMethodIndex: 0,
+      communityClusterFilters: new Map(),
+      communityColorMode: 'cluster',
+      communitySelectedTeams: null,
+      communityVisibleClustersByMethod: new Map(),
+      reductionMethod: 'pca',
+      dataset: initialDataset,
+      team: 'all',
+      query: '',
+      aggregation: 'mean',
+      graphMode: 'knn',
+      graphK: 3,
+      graphPercentile: 90,
+      projectionSelectedTeams: new Set(),
+      projectionTeamColors: new Map(),
+      projectionShowPoints: false,
+      projectionShowCentroids: true,
+      projectionShowRadii: true,
+      projectionShowIntraRadii: true,
+      projectionSortKey: 'name',
+      projectionSortDir: 'asc',
+    };
+
+    const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+    function imageUrl(path) {
+      return '/' + String(path || '').replace(/^\/+/, '');
+    }
+
+    function scoreColor(value) {
+      if (value == null) return '#f3f4f6';
+      const t = Math.max(0, Math.min(1, (value + 0.1) / 0.45));
+      const hue = 12 + t * 160;
+      return `hsl(${hue} 55% 88%)`;
+    }
+
+    function hashString(value) {
+      let hash = 0;
+      const text = String(value || '');
+      for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+      }
+      return Math.abs(hash);
+    }
+
+    function teamColor(team) {
+      if (state.projectionTeamColors.has(team)) {
+        return state.projectionTeamColors.get(team);
+      }
+      const hue = hashString(team) % 360;
+      return `hsl(${hue} 68% 52%)`;
+    }
+
+    function clusterColor(clusterId) {
+      const hue = (Number(clusterId) * 47 + 18) % 360;
+      return `hsl(${hue} 70% 50%)`;
+    }
+
+    function defaultTeamHexColor(team) {
+      const hue = hashString(team) % 360;
+      return hslToHex(hue / 360, 0.68, 0.52);
+    }
+
+    function hslToHex(h, s, l) {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      const rgb = [hue2rgb(p, q, h + 1 / 3), hue2rgb(p, q, h), hue2rgb(p, q, h - 1 / 3)];
+      return '#' + rgb.map(value => {
+        const hex = Math.round(value * 255).toString(16).padStart(2, '0');
+        return hex;
+      }).join('');
+    }
+
+    function scaledHeatmapColor(value, domain) {
+      if (value == null || !Number.isFinite(value)) return '#f3f4f6';
+      const span = Math.max(domain.max - domain.min, 0.0001);
+      const t = Math.max(0, Math.min(1, (value - domain.min) / span));
+      if (t < 0.33) {
+        const p = t / 0.33;
+        return `hsl(${250 - p * 52} ${72 + p * 16}% ${36 + p * 12}%)`;
+      }
+      if (t < 0.68) {
+        const p = (t - 0.33) / 0.35;
+        return `hsl(${198 - p * 146} ${88 + p * 8}% ${48 + p * 8}%)`;
+      }
+      const p = (t - 0.68) / 0.32;
+      return `hsl(${52 - p * 44} ${96 - p * 10}% ${56 - p * 2}%)`;
+    }
+
+    function matrixDomain(matrix, includeDiagonal = false) {
+      const values = [];
+      for (let i = 0; i < matrix.length; i++) {
+        for (let j = 0; j < matrix[i].length; j++) {
+          if (!includeDiagonal && i === j) continue;
+          const value = matrix[i][j];
+          if (value != null && Number.isFinite(value)) values.push(value);
+        }
+      }
+      return {
+        min: Math.min(...values),
+        max: Math.max(...values),
+      };
+    }
+
+    function playerScoreColor(value) {
+      if (value == null) return '#f3f4f6';
+      const t = Math.max(0, Math.min(1, (value + 0.05) / 0.45));
+      const hue = 12 + t * 160;
+      const light = 92 - t * 22;
+      return `hsl(${hue} 58% ${light}%)`;
+    }
+
+    function intraSimilarity(team) {
+      const value = state.payload?.intra_team_stats?.[team]?.median;
+      return value == null || !Number.isFinite(value) ? null : value;
+    }
+
+    function formatIntraSimilarity(team) {
+      const value = intraSimilarity(team);
+      return value == null ? '-' : fmt.format(value);
+    }
+
+    function selectedTeamMatrix() {
+      return (
+        state.payload?.team_similarity_matrices?.[state.aggregation]
+        || state.payload?.team_similarity_matrix
+        || []
+      );
+    }
+
+    function aggregationLabel() {
+      if (state.aggregation === 'median') return 'mediana';
+      if (state.aggregation === 'top3_mean') return 'promedio top 3';
+      if (state.aggregation === 'top5_mean') return 'promedio top 5';
+      return 'promedio';
+    }
+
+    function aggregationHelpText() {
+      const label = aggregationLabel();
+      if (state.aggregation === 'top3_mean' || state.aggregation === 'top5_mean') {
+        const k = state.aggregation === 'top3_mean' ? 3 : 5;
+        return `Para cada par de selecciones se calcula el coseno ArcFace entre todos los jugadores aceptados por QC de ambos paises, se toman los ${k} pares con score mas alto y la celda muestra su promedio. En la diagonal se hace lo mismo con pares internos de una misma seleccion, excluyendo jugador contra si mismo.`;
+      }
+      return `Para cada par de selecciones se calcula el coseno ArcFace entre todos los jugadores aceptados por QC de ambos paises, y la celda muestra la ${label} de esos scores. En la diagonal se usa la ${label} de los pares internos de una misma seleccion, excluyendo jugador contra si mismo.`;
+    }
+
+    function renderMetricNotes() {
+      const label = aggregationLabel();
+      const text = aggregationHelpText();
+      document.getElementById('metricNote').innerHTML = `
+        Metrica original: similitud por ${label} entre selecciones
+        <span class="help" title="${escapeAttr(text)}">?</span>
+      `;
+      document.getElementById('clusterMetricNote').textContent =
+        `Clustering sobre distancia = 1 - similitud por ${label}.`;
+      document.getElementById('graphMetricNote').textContent =
+        `Nodos = selecciones; aristas = similitud por ${label} entre selecciones.`;
+      document.getElementById('communitiesMetricNote').textContent =
+        'Comunidades calculadas sobre similitud jugador-jugador original; no dependen de la reduccion 2D.';
+      const projection = state.projection;
+      document.getElementById('projectionMetricNote').textContent = projection
+        ? `Proyeccion ${projection.method || '2D'} de embeddings ${projection.embedding_model || ''}; radio mapa = dispersion en la proyeccion; radio intra punteado = homogeneidad directa por mediana de cosenos intraequipo.`
+        : 'No hay proyeccion 2D generada para este dataset.';
+    }
+
+    function setupTabs() {
+      document.querySelectorAll('.tab').forEach(button => {
+        button.addEventListener('click', () => {
+          const tab = button.dataset.tab;
+          document.querySelectorAll('.tab').forEach(item => {
+            item.classList.toggle('active', item.dataset.tab === tab);
+          });
+          document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.hidden = panel.id !== `tab-${tab}`;
+          });
+        });
+      });
+    }
+
+    function renderMetrics(payload) {
+      const pairs = payload.top_pairs_cross_team || [];
+      const maxPair = pairs[0];
+      const matrixPairs = payload.players_count * (payload.players_count - 1) / 2;
+      document.getElementById('metrics').innerHTML = [
+        [payload.players_count, 'Jugadores QC OK'],
+        [payload.teams_count, 'Selecciones'],
+        [matrixPairs.toLocaleString('es-AR'), 'Pares calculados'],
+        [maxPair ? fmt.format(maxPair.score) : '-', 'Top score cruzado'],
+      ].map(([value, label]) => `
+        <div class="metric">
+          <strong>${value}</strong>
+          <span>${label}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderTeamFilter(payload) {
+      const select = document.getElementById('teamFilter');
+      select.innerHTML = '<option value="all">Todas las selecciones</option>' +
+        payload.teams.map(team => `<option value="${team}">${team}</option>`).join('');
+      select.addEventListener('change', () => {
+        state.team = select.value;
+        const attractionSelect = document.getElementById('attractionTeamFilter');
+        if (attractionSelect) attractionSelect.value = state.team;
+        renderPlayers();
+        renderProjection();
+        renderReduction();
+        renderAttraction();
+        renderCommunities();
+      });
+    }
+
+    function methodLabel(method) {
+      const params = method.params || {};
+      if (method.method === 'knn_greedy_modularity') {
+        return `kNN comunidades · k=${params.k}${params.external_only ? ' · solo externos' : ''}`;
+      }
+      if (method.method === 'agglomerative') {
+        return `Aglomerativo · ${params.n_clusters} clusters · ${params.linkage}`;
+      }
+      if (method.method === 'spectral_knn') {
+        return `Spectral kNN · ${params.n_clusters} clusters · k=${params.k}`;
+      }
+      if (method.method === 'multiplex_knn_greedy_modularity') {
+        return `Multiplex comunidades · k=${params.k} · beta=${params.beta_same_team}`;
+      }
+      return method.method;
+    }
+
+    function setupCommunityControls() {
+      const select = document.getElementById('communityMethod');
+      const methods = state.clusterExploration?.methods || [];
+      select.innerHTML = methods.map((method, index) => (
+        `<option value="${index}">${escapeAttr(methodLabel(method))}</option>`
+      )).join('');
+      select.disabled = methods.length === 0;
+      select.value = String(state.communityMethodIndex);
+      select.addEventListener('change', () => {
+        state.communityMethodIndex = Number(select.value);
+        renderCommunities();
+      });
+      const colorMode = document.getElementById('communityColorMode');
+      colorMode.value = state.communityColorMode;
+      colorMode.addEventListener('change', () => {
+        state.communityColorMode = colorMode.value;
+        renderCommunities();
+      });
+    }
+
+    function setupPlayerHierarchyControls() {
+      const select = document.getElementById('playerHierarchySubset');
+      const subsets = state.playerHierarchy?.subsets || [];
+      select.innerHTML = subsets.map((subset, index) => (
+        `<option value="${index}">${escapeAttr(subset.label || subset.name)}</option>`
+      )).join('');
+      select.disabled = subsets.length === 0;
+      select.value = String(state.playerHierarchySubsetIndex);
+      select.addEventListener('change', () => {
+        state.playerHierarchySubsetIndex = Number(select.value);
+        renderPlayerHierarchy();
+      });
+    }
+
+    function methodDescription(method) {
+      if (method.method === 'multiplex_knn_greedy_modularity') {
+        return 'Suma a la afinidad facial una conexion blanda entre jugadores de la misma seleccion. Conserva entidad sin esconder del todo los subgrupos cruzados.';
+      }
+      if (method.method === 'knn_greedy_modularity') {
+        return method.params?.external_only
+          ? 'Construye un grafo de vecinos excluyendo jugadores de la misma seleccion y detecta comunidades por modularidad.'
+          : 'Construye un grafo kNN jugador-jugador y detecta comunidades por modularidad greedy.';
+      }
+      if (method.method === 'agglomerative') {
+        return 'Agrupa jerarquicamente por distancia de coseno. Es interpretable, pero fuerza una particion plana al cortar el arbol.';
+      }
+      if (method.method === 'spectral_knn') {
+        return 'Agrupa usando la estructura del grafo kNN. Puede capturar comunidades no esfericas, pero depende del k y del numero de clusters.';
+      }
+      return 'Metodo exploratorio sobre la matriz de similitud jugador-jugador.';
+    }
+
+    function projectionTeamCounts() {
+      const counts = new Map();
+      for (const point of state.projection?.points || []) {
+        counts.set(point.team, (counts.get(point.team) || 0) + 1);
+      }
+      return counts;
+    }
+
+    function initializeProjectionTeamControls() {
+      const teams = state.payload?.teams || [];
+      if (!state.projectionSelectedTeams.size) {
+        const defaults = teams.slice(0, 8);
+        state.projectionSelectedTeams = new Set(defaults);
+      }
+      for (const team of teams) {
+        if (!state.projectionTeamColors.has(team)) {
+          state.projectionTeamColors.set(team, defaultTeamHexColor(team));
+        }
+      }
+      renderProjectionTeamControls();
+      document.getElementById('projectionSelectAll').addEventListener('click', () => {
+        state.projectionSelectedTeams = new Set(teams);
+        renderProjectionTeamControls();
+        renderProjection();
+        renderReductionTeamControls();
+        renderReduction();
+      });
+      document.getElementById('projectionSelectNone').addEventListener('click', () => {
+        state.projectionSelectedTeams = new Set();
+        renderProjectionTeamControls();
+        renderProjection();
+        renderReductionTeamControls();
+        renderReduction();
+      });
+      document.getElementById('projectionSortName').addEventListener('click', () => {
+        if (state.projectionSortKey === 'name') {
+          state.projectionSortDir = state.projectionSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.projectionSortKey = 'name';
+          state.projectionSortDir = 'asc';
+        }
+        renderProjectionTeamControls();
+        renderReductionTeamControls();
+      });
+      document.getElementById('projectionSortIntra').addEventListener('click', () => {
+        if (state.projectionSortKey === 'intra') {
+          state.projectionSortDir = state.projectionSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.projectionSortKey = 'intra';
+          state.projectionSortDir = 'desc';
+        }
+        renderProjectionTeamControls();
+        renderReductionTeamControls();
+      });
+    }
+
+    function renderProjectionTeamControls() {
+      const teams = [...(state.payload?.teams || [])].sort((a, b) => {
+        let cmp = 0;
+        if (state.projectionSortKey === 'intra') {
+          const av = intraSimilarity(a);
+          const bv = intraSimilarity(b);
+          if (av == null && bv == null) cmp = 0;
+          else if (av == null) cmp = 1;
+          else if (bv == null) cmp = -1;
+          else cmp = av - bv;
+        } else {
+          cmp = a.localeCompare(b, 'es');
+        }
+        return state.projectionSortDir === 'asc' ? cmp : -cmp;
+      });
+      const counts = projectionTeamCounts();
+      document.getElementById('projectionSortName').textContent =
+        `Nombre ${state.projectionSortKey === 'name' && state.projectionSortDir === 'desc' ? '↓' : '↑'}`;
+      document.getElementById('projectionSortIntra').textContent =
+        `Similitud ${state.projectionSortKey === 'intra' && state.projectionSortDir === 'asc' ? '↑' : '↓'}`;
+      document.getElementById('projectionTeamList').innerHTML = teams.map(team => {
+        const checked = state.projectionSelectedTeams.has(team) ? ' checked' : '';
+        const color = state.projectionTeamColors.get(team) || defaultTeamHexColor(team);
+        const intra = formatIntraSimilarity(team);
+        return `
+          <label class="projection-team-row" title="${escapeAttr(team)}">
+            <input class="projection-team-check" type="checkbox" data-team="${escapeAttr(team)}"${checked}>
+            <input class="projection-team-color" type="color" data-team="${escapeAttr(team)}" value="${escapeAttr(color)}">
+            <span class="projection-team-name">${team}</span>
+            <span class="projection-team-score">${intra}</span>
+            <span class="projection-team-count">${counts.get(team) || 0}</span>
+          </label>
+        `;
+      }).join('');
+      document.querySelectorAll('.projection-team-check').forEach(input => {
+        input.addEventListener('change', () => {
+          const team = input.dataset.team;
+          if (input.checked) state.projectionSelectedTeams.add(team);
+          else state.projectionSelectedTeams.delete(team);
+          renderProjection();
+          renderReductionTeamControls();
+          renderReduction();
+        });
+      });
+      document.querySelectorAll('.projection-team-color').forEach(input => {
+        input.addEventListener('input', () => {
+          state.projectionTeamColors.set(input.dataset.team, input.value);
+          renderProjection();
+          renderReductionTeamControls();
+          renderReduction();
+        });
+      });
+    }
+
+    function setupReductionControls() {
+      const select = document.getElementById('reductionMethod');
+      select.value = state.reductionMethod;
+      select.addEventListener('change', async () => {
+        state.reductionMethod = select.value;
+        await ensureReductionLoaded(state.reductionMethod);
+        renderReduction();
+      });
+      document.getElementById('reductionSelectAll').addEventListener('click', () => {
+        state.projectionSelectedTeams = new Set(state.payload?.teams || []);
+        renderProjectionTeamControls();
+        renderReductionTeamControls();
+        renderProjection();
+        renderReduction();
+      });
+      document.getElementById('reductionSelectNone').addEventListener('click', () => {
+        state.projectionSelectedTeams = new Set();
+        renderProjectionTeamControls();
+        renderReductionTeamControls();
+        renderProjection();
+        renderReduction();
+      });
+    }
+
+    function setupAttractionControls() {
+      const select = document.getElementById('attractionTeamFilter');
+      select.innerHTML = '<option value="all">Todas las selecciones</option>' +
+        (state.payload?.teams || []).map(team => `<option value="${team}">${team}</option>`).join('');
+      select.value = state.team;
+      select.addEventListener('change', () => {
+        state.team = select.value;
+        document.getElementById('teamFilter').value = state.team;
+        renderPlayers();
+        renderProjection();
+        renderReduction();
+        renderAttraction();
+      });
+    }
+
+    function renderReductionTeamControls() {
+      const teams = [...(state.payload?.teams || [])].sort((a, b) => a.localeCompare(b, 'es'));
+      const counts = projectionTeamCounts();
+      document.getElementById('reductionTeamList').innerHTML = teams.map(team => {
+        const checked = state.projectionSelectedTeams.has(team) ? ' checked' : '';
+        const color = state.projectionTeamColors.get(team) || defaultTeamHexColor(team);
+        return `
+          <label class="projection-team-row" title="${escapeAttr(team)}">
+            <input class="reduction-team-check" type="checkbox" data-team="${escapeAttr(team)}"${checked}>
+            <input class="reduction-team-color" type="color" data-team="${escapeAttr(team)}" value="${escapeAttr(color)}">
+            <span class="projection-team-name">${team}</span>
+            <span class="projection-team-score">${formatIntraSimilarity(team)}</span>
+            <span class="projection-team-count">${counts.get(team) || 0}</span>
+          </label>
+        `;
+      }).join('');
+      document.querySelectorAll('.reduction-team-check').forEach(input => {
+        input.addEventListener('change', () => {
+          const team = input.dataset.team;
+          if (input.checked) state.projectionSelectedTeams.add(team);
+          else state.projectionSelectedTeams.delete(team);
+          renderProjectionTeamControls();
+          renderProjection();
+          renderReduction();
+        });
+      });
+      document.querySelectorAll('.reduction-team-color').forEach(input => {
+        input.addEventListener('input', () => {
+          state.projectionTeamColors.set(input.dataset.team, input.value);
+          renderProjectionTeamControls();
+          renderProjection();
+          renderReduction();
+        });
+      });
+    }
+
+    function setupProjectionDisplayControls() {
+      const controls = [
+        ['projectionShowPoints', 'projectionShowPoints'],
+        ['projectionShowCentroids', 'projectionShowCentroids'],
+        ['projectionShowRadii', 'projectionShowRadii'],
+        ['projectionShowIntraRadii', 'projectionShowIntraRadii'],
+      ];
+      for (const [id, key] of controls) {
+        const input = document.getElementById(id);
+        input.checked = state[key];
+        input.addEventListener('change', () => {
+          state[key] = input.checked;
+          renderProjection();
+        });
+      }
+    }
+
+    function renderMatrix(payload) {
+      const teams = payload.teams;
+      const counts = payload.team_player_counts || {};
+      const matrix = selectedTeamMatrix();
+      const head = '<tr><th>Seleccion</th>' + teams.map(team => `<th title="${team}">${team}</th>`).join('') + '</tr>';
+      const rows = teams.map((team, i) => {
+        const cells = teams.map((_, j) => {
+          const value = matrix[i][j];
+          const label = value == null ? '-' : fmt.format(value);
+          const title = `${team} vs ${teams[j]}: ${label}`;
+          return `<td class="matrix-cell" data-team-a="${escapeAttr(team)}" data-team-b="${escapeAttr(teams[j])}" title="${escapeAttr(title)}" style="background:${scoreColor(value)}">${label}</td>`;
+        }).join('');
+        return `<tr><td>${team} (${counts[team] || 0})</td>${cells}</tr>`;
+      }).join('');
+      document.getElementById('matrix').innerHTML = `<table>${head}${rows}</table>`;
+      document.querySelectorAll('.matrix-cell').forEach(cell => {
+        cell.addEventListener('click', () => openPairModal(cell.dataset.teamA, cell.dataset.teamB));
+      });
+    }
+
+    function distanceBetweenClusters(a, b, matrix) {
+      let total = 0;
+      let count = 0;
+      for (const i of a.indices) {
+        for (const j of b.indices) {
+          if (i === j) continue;
+          const sim = matrix[i]?.[j];
+          if (sim == null || !Number.isFinite(sim)) continue;
+          total += 1 - sim;
+          count += 1;
+        }
+      }
+      return count ? total / count : Number.POSITIVE_INFINITY;
+    }
+
+    function buildClusterTree(matrix) {
+      let clusters = matrix.map((_, idx) => ({
+        indices: [idx],
+        children: null,
+        distance: 0,
+      }));
+      while (clusters.length > 1) {
+        let bestA = 0;
+        let bestB = 1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (let a = 0; a < clusters.length; a++) {
+          for (let b = a + 1; b < clusters.length; b++) {
+            const distance = distanceBetweenClusters(clusters[a], clusters[b], matrix);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestA = a;
+              bestB = b;
+            }
+          }
+        }
+        const left = clusters[bestA];
+        const right = clusters[bestB];
+        const merged = {
+          indices: left.indices.concat(right.indices),
+          children: [left, right],
+          distance: bestDistance,
+        };
+        clusters = clusters.filter((_, idx) => idx !== bestA && idx !== bestB);
+        clusters.push(merged);
+      }
+      return clusters[0];
+    }
+
+    function clusterLeaves(node) {
+      if (!node.children) return node.indices;
+      return node.children.flatMap(clusterLeaves);
+    }
+
+    function escapeAttr(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    function treePositions(root, order, cell, dendroSize) {
+      const leafPos = new Map(order.map((idx, pos) => [idx, pos * cell + cell / 2]));
+      const maxDistance = Math.max(root.distance || 0.0001, 0.0001);
+      const minDistance = minMergeDistance(root);
+      const distanceSpan = Math.max(maxDistance - minDistance, 0.0001);
+      const visualDistance = distance => {
+        if (distance <= 0) return 0;
+        const normalized = Math.max(0, Math.min(1, (distance - minDistance) / distanceSpan));
+        return 0.08 + Math.pow(normalized, 0.55) * 0.92;
+      };
+      const topY = distance => dendroSize - visualDistance(distance) * (dendroSize - 12);
+      const leftX = distance => dendroSize - visualDistance(distance) * (dendroSize - 12);
+
+      function center(node) {
+        if (!node.children) return leafPos.get(node.indices[0]);
+        const [a, b] = node.children;
+        return (center(a) + center(b)) / 2;
+      }
+
+      return { center, topY, leftX, maxDistance, minDistance };
+    }
+
+    function minMergeDistance(node) {
+      const distances = [];
+      function walk(item) {
+        if (!item.children) return;
+        distances.push(item.distance);
+        item.children.forEach(walk);
+      }
+      walk(node);
+      return Math.min(...distances.filter(value => Number.isFinite(value)));
+    }
+
+    function dendrogramTopSvg(root, order, cell, dendroSize) {
+      const { center, topY, maxDistance, minDistance } = treePositions(root, order, cell, dendroSize);
+      const width = order.length * cell;
+      const paths = [];
+      function walk(node) {
+        if (!node.children) return;
+        const [left, right] = node.children;
+        const x1 = center(left);
+        const x2 = center(right);
+        const y = topY(node.distance);
+        const y1 = topY(left.distance || 0);
+        const y2 = topY(right.distance || 0);
+        paths.push(`<path class="dendro-path" d="M${x1},${y1} V${y} H${x2} V${y2}" />`);
+        walk(left);
+        walk(right);
+      }
+      walk(root);
+      const guideY = topY(minDistance + (maxDistance - minDistance) * 0.5);
+      return `
+        <svg class="dendro-top" viewBox="0 0 ${width} ${dendroSize}" preserveAspectRatio="none" aria-label="Cladograma superior">
+          <line class="distance-axis" x1="0" y1="${guideY}" x2="${width}" y2="${guideY}" />
+          ${paths.join('')}
+        </svg>
+      `;
+    }
+
+    function dendrogramLeftSvg(root, order, cell, dendroSize) {
+      const { center, leftX, maxDistance, minDistance } = treePositions(root, order, cell, dendroSize);
+      const height = order.length * cell;
+      const paths = [];
+      function walk(node) {
+        if (!node.children) return;
+        const [top, bottom] = node.children;
+        const y1 = center(top);
+        const y2 = center(bottom);
+        const x = leftX(node.distance);
+        const x1 = leftX(top.distance || 0);
+        const x2 = leftX(bottom.distance || 0);
+        paths.push(`<path class="dendro-path" d="M${x1},${y1} H${x} V${y2} H${x2}" />`);
+        walk(top);
+        walk(bottom);
+      }
+      walk(root);
+      const guideX = leftX(minDistance + (maxDistance - minDistance) * 0.5);
+      return `
+        <svg class="dendro-left" viewBox="0 0 ${dendroSize} ${height}" preserveAspectRatio="none" aria-label="Cladograma lateral">
+          <line class="distance-axis" x1="${guideX}" y1="0" x2="${guideX}" y2="${height}" />
+          ${paths.join('')}
+        </svg>
+      `;
+    }
+
+    function renderClusterHeatmap(payload) {
+      const teams = payload.teams;
+      const counts = payload.team_player_counts || {};
+      const matrix = selectedTeamMatrix();
+      const colorDomain = matrixDomain(matrix, false);
+      const tree = buildClusterTree(matrix);
+      const order = clusterLeaves(tree);
+      const orderedTeams = order.map(idx => teams[idx]);
+      const cell = 18;
+      const dendro = 132;
+      const cells = order.flatMap(rowIdx => {
+          const rowTeam = teams[rowIdx];
+          return order.map(colIdx => {
+            const value = matrix[rowIdx][colIdx];
+            const label = value == null ? '-' : fmt.format(value);
+            const scaled = value == null ? '-' : fmt.format((value - colorDomain.min) / Math.max(colorDomain.max - colorDomain.min, 0.0001));
+            const title = `${rowTeam} vs ${teams[colIdx]}: score original ${label}; color min-max ${scaled}`;
+            const diagonal = rowIdx === colIdx ? ' diagonal' : '';
+            return `<div class="cluster-cell${diagonal}" title="${escapeAttr(title)}" style="background:${scaledHeatmapColor(value, colorDomain)}">${label}</div>`;
+          });
+        }).join('');
+      const rowLabels = order.map(idx => {
+        const team = teams[idx];
+        return `<div class="cluster-row-label" title="${escapeAttr(team)}">${team} (${counts[team] || 0})</div>`;
+      }).join('');
+      const colLabels = orderedTeams.map(team => (
+        `<div class="cluster-col-label" title="${escapeAttr(team)}">${team}</div>`
+      )).join('');
+      const maxDistance = fmt.format(tree.distance || 0);
+      document.getElementById('clusterScaleLabel').textContent =
+        `(color min-max de cruces entre selecciones; ${aggregationLabel()} original ${fmt.format(colorDomain.min)} a ${fmt.format(colorDomain.max)})`;
+      const node = document.getElementById('clusterHeatmap');
+      node.innerHTML = `
+        <div class="cluster-figure" style="--n:${orderedTeams.length}">
+          <div class="cluster-corner">distancia visual normalizada<br>max real ${maxDistance}</div>
+          ${dendrogramTopSvg(tree, order, cell, dendro)}
+          ${dendrogramLeftSvg(tree, order, cell, dendro)}
+          <div class="heatmap-grid">${cells}</div>
+          <div class="cluster-row-labels">${rowLabels}</div>
+          <div class="cluster-col-labels">${colLabels}</div>
+        </div>
+      `;
+    }
+
+    function graphCandidateEdges(matrix) {
+      const edges = [];
+      for (let i = 0; i < matrix.length; i++) {
+        for (let j = i + 1; j < matrix.length; j++) {
+          const score = matrix[i][j];
+          if (score != null && Number.isFinite(score)) edges.push({ source: i, target: j, score });
+        }
+      }
+      return edges.sort((a, b) => b.score - a.score);
+    }
+
+    function percentile(values, p) {
+      const sorted = [...values].sort((a, b) => a - b);
+      if (!sorted.length) return 0;
+      const pos = (sorted.length - 1) * (p / 100);
+      const lo = Math.floor(pos);
+      const hi = Math.ceil(pos);
+      if (lo === hi) return sorted[lo];
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+    }
+
+    function graphEdges(matrix) {
+      const candidates = graphCandidateEdges(matrix);
+      if (state.graphMode === 'threshold') {
+        const threshold = percentile(candidates.map(edge => edge.score), state.graphPercentile);
+        return {
+          threshold,
+          edges: candidates.filter(edge => edge.score >= threshold),
+        };
+      }
+
+      const seen = new Set();
+      const edges = [];
+      for (let i = 0; i < matrix.length; i++) {
+        const nearest = candidates
+          .filter(edge => edge.source === i || edge.target === i)
+          .slice(0, state.graphK);
+        for (const edge of nearest) {
+          const key = `${Math.min(edge.source, edge.target)}-${Math.max(edge.source, edge.target)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          edges.push(edge);
+        }
+      }
+      return { threshold: null, edges: edges.sort((a, b) => b.score - a.score) };
+    }
+
+    function graphLayout(n, edges, width, height) {
+      const cx = width / 2;
+      const cy = height / 2;
+      const radius = Math.min(width, height) * 0.36;
+      const nodes = Array.from({ length: n }, (_, i) => {
+        const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+        return {
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+          vx: 0,
+          vy: 0,
+        };
+      });
+      const strengths = edges.map(edge => Math.max(0.01, edge.score));
+      const minScore = Math.min(...strengths);
+      const maxScore = Math.max(...strengths);
+      const scoreSpan = Math.max(maxScore - minScore, 0.0001);
+
+      for (let iter = 0; iter < 360; iter++) {
+        for (let i = 0; i < n; i++) {
+          for (let j = i + 1; j < n; j++) {
+            const a = nodes[i];
+            const b = nodes[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 1) d2 = 1;
+            const d = Math.sqrt(d2);
+            const force = 850 / d2;
+            dx /= d;
+            dy /= d;
+            a.vx -= dx * force;
+            a.vy -= dy * force;
+            b.vx += dx * force;
+            b.vy += dy * force;
+          }
+        }
+        for (const edge of edges) {
+          const a = nodes[edge.source];
+          const b = nodes[edge.target];
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+          dx /= d;
+          dy /= d;
+          const t = (edge.score - minScore) / scoreSpan;
+          const target = 260 - t * 110;
+          const force = (d - target) * (0.006 + t * 0.018);
+          a.vx += dx * force;
+          a.vy += dy * force;
+          b.vx -= dx * force;
+          b.vy -= dy * force;
+        }
+        for (const node of nodes) {
+          node.vx += (cx - node.x) * 0.002;
+          node.vy += (cy - node.y) * 0.002;
+          node.x += node.vx;
+          node.y += node.vy;
+          node.vx *= 0.82;
+          node.vy *= 0.82;
+          node.x = Math.max(60, Math.min(width - 130, node.x));
+          node.y = Math.max(50, Math.min(height - 50, node.y));
+        }
+      }
+      return nodes;
+    }
+
+    function renderGraph(payload) {
+      const teams = payload.teams;
+      const counts = payload.team_player_counts || {};
+      const matrix = selectedTeamMatrix();
+      const { edges, threshold } = graphEdges(matrix);
+      const width = 1120;
+      const height = 680;
+      const nodes = graphLayout(teams.length, edges, width, height);
+      const scores = edges.map(edge => edge.score);
+      const minScore = scores.length ? Math.min(...scores) : 0;
+      const maxScore = scores.length ? Math.max(...scores) : 1;
+      const scoreSpan = Math.max(maxScore - minScore, 0.0001);
+      const edgeHtml = edges.map(edge => {
+        const a = nodes[edge.source];
+        const b = nodes[edge.target];
+        const t = (edge.score - minScore) / scoreSpan;
+        const widthValue = 1.2 + t * 5.5;
+        const opacity = 0.25 + t * 0.55;
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        return `
+          <line class="graph-edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${widthValue}" opacity="${opacity}">
+            <title>${escapeAttr(teams[edge.source])} vs ${escapeAttr(teams[edge.target])}: ${fmt.format(edge.score)}</title>
+          </line>
+          ${t > 0.72 ? `<text class="graph-score" x="${midX}" y="${midY}">${fmt.format(edge.score)}</text>` : ''}
+        `;
+      }).join('');
+      const nodeHtml = nodes.map((node, i) => {
+        const degree = edges.filter(edge => edge.source === i || edge.target === i).length;
+        const r = 7 + Math.sqrt(Math.max(1, counts[teams[i]] || 1)) * 2.2;
+        return `
+          <circle class="graph-node" cx="${node.x}" cy="${node.y}" r="${r}">
+            <title>${escapeAttr(teams[i])}: ${counts[teams[i]] || 0} jugadores QC OK · grado ${degree}</title>
+          </circle>
+          <text class="graph-label" x="${node.x + r + 4}" y="${node.y + 4}">${escapeAttr(teams[i])}</text>
+        `;
+      }).join('');
+      const modeText = state.graphMode === 'knn'
+        ? `kNN k=${state.graphK}`
+        : `threshold p${state.graphPercentile} >= ${fmt.format(threshold)}`;
+      document.getElementById('graphSummary').textContent =
+        `${modeText}; ${edges.length} aristas; score ${fmt.format(minScore)} a ${fmt.format(maxScore)}`;
+      document.getElementById('graphView').innerHTML = `
+        <svg class="graph-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafo de similitud entre selecciones">
+          <g>${edgeHtml}</g>
+          <g>${nodeHtml}</g>
+        </svg>
+      `;
+    }
+
+    function renderProjection() {
+      renderProjectionInto({
+        projection: state.projection,
+        viewId: 'projectionView',
+        summaryId: 'projectionSummary',
+        emptyText: 'Sin proyeccion disponible.',
+        includeDisplayToggles: true,
+      });
+    }
+
+    async function ensureReductionLoaded(method) {
+      if (state.reductions.has(method)) return state.reductions.get(method);
+      const dataset = DATASETS[state.dataset];
+      const url = dataset.reductionUrls?.[method];
+      if (!url) return null;
+      const projection = await loadProjection(url);
+      if (projection) state.reductions.set(method, projection);
+      return projection;
+    }
+
+    function renderReduction() {
+      const projection = state.reductions.get(state.reductionMethod);
+      const label = state.reductionMethod.toUpperCase();
+      document.getElementById('reductionMetricNote').textContent =
+        projection
+          ? `${label}: misma nube de embeddings, otra geometria de reduccion. Usa los mismos colores y selecciones del mapa principal.`
+          : `${label}: proyeccion no generada para este dataset.`;
+      renderProjectionInto({
+        projection,
+        viewId: 'reductionView',
+        summaryId: 'reductionSummary',
+        emptyText: `Sin proyeccion ${state.reductionMethod} disponible.`,
+        includeDisplayToggles: false,
+      });
+    }
+
+    function renderProjectionInto({ projection, viewId, summaryId, emptyText, includeDisplayToggles }) {
+      const view = document.getElementById(viewId);
+      if (!projection?.points?.length) {
+        document.getElementById(summaryId).textContent = emptyText;
+        view.innerHTML = '<div class="panel-note">Generar con scripts/build_vitrina_embedding_projection.py.</div>';
+        return;
+      }
+
+      const width = 1120;
+      const height = 680;
+      const pad = 48;
+      const q = state.query.trim().toLowerCase();
+      const matchesFilter = point => {
+        const teamOk = state.team === 'all' || point.team === state.team;
+        const text = `${point.name} ${point.team} ${point.position || ''}`.toLowerCase();
+        return teamOk && (!q || text.includes(q));
+      };
+      const xy = point => ({
+        x: pad + point.x * (width - pad * 2),
+        y: height - pad - point.y * (height - pad * 2),
+      });
+      const intraStats = state.payload?.intra_team_stats || {};
+      const intraMedians = Object.values(intraStats)
+        .map(item => item?.median)
+        .filter(value => value != null && Number.isFinite(value));
+      const intraMin = intraMedians.length ? Math.min(...intraMedians) : 0;
+      const intraMax = intraMedians.length ? Math.max(...intraMedians) : 1;
+      const intraSpan = Math.max(intraMax - intraMin, 0.0001);
+      const intraRadius = team => {
+        const median = intraStats[team]?.median;
+        if (median == null || !Number.isFinite(median)) return null;
+        const homogeneity = Math.max(0, Math.min(1, (median - intraMin) / intraSpan));
+        return {
+          radius: 5 + (1 - homogeneity) * 120,
+          homogeneity,
+          median,
+        };
+      };
+      const grouped = new Map();
+      for (const point of projection.points) {
+        if (!grouped.has(point.team)) grouped.set(point.team, []);
+        grouped.get(point.team).push(point);
+      }
+      const centroids = [...grouped.entries()].map(([team, points]) => {
+        const total = points.reduce((acc, point) => {
+          const pos = xy(point);
+          acc.x += pos.x;
+          acc.y += pos.y;
+          return acc;
+        }, { x: 0, y: 0 });
+        return {
+          team,
+          count: points.length,
+          x: total.x / points.length,
+          y: total.y / points.length,
+        };
+      });
+      const centroidByTeam = new Map(centroids.map(item => [item.team, item]));
+      for (const [team, points] of grouped.entries()) {
+        const centroid = centroidByTeam.get(team);
+        const distances = points.map(point => {
+          const pos = xy(point);
+          return Math.hypot(pos.x - centroid.x, pos.y - centroid.y);
+        });
+        const rms = Math.sqrt(distances.reduce((acc, value) => acc + value * value, 0) / Math.max(1, distances.length));
+        const sorted = [...distances].sort((a, b) => a - b);
+        centroid.radius = rms;
+        centroid.radiusP80 = sorted[Math.floor((sorted.length - 1) * 0.8)] || rms;
+      }
+      const selectedCount = projection.points.filter(point => state.projectionSelectedTeams.has(point.team)).length;
+      const focusedCount = projection.points.filter(point => state.projectionSelectedTeams.has(point.team) && matchesFilter(point)).length;
+      const showPoints = includeDisplayToggles ? state.projectionShowPoints : true;
+      const showCentroids = includeDisplayToggles ? state.projectionShowCentroids : true;
+      const showMapRadii = includeDisplayToggles ? state.projectionShowRadii : false;
+      const showIntraRadii = includeDisplayToggles ? state.projectionShowIntraRadii : false;
+      const pointHtml = showPoints ? projection.points.map(point => {
+        const pos = xy(point);
+        const selected = state.projectionSelectedTeams.has(point.team);
+        const focused = selected && matchesFilter(point);
+        const klass = selected
+          ? `projection-point${focused ? ' focused' : ''}`
+          : 'projection-point dimmed';
+        const title = `${point.name} · ${point.team}${point.position ? ' · ' + point.position : ''}`;
+        return `
+          <circle class="${klass}" cx="${pos.x}" cy="${pos.y}" r="${focused ? 4.2 : 3.1}" fill="${selected ? teamColor(point.team) : '#cbd5e1'}">
+            <title>${escapeAttr(title)}</title>
+          </circle>
+        `;
+      }).join('') : '';
+      const selectedCentroids = centroids.filter(item => state.projectionSelectedTeams.has(item.team));
+      const radiusHtml = showMapRadii ? selectedCentroids.map(item => {
+        const visible = matchesFilter({ name: '', team: item.team, position: '' });
+        const radius = Math.max(8, item.radius);
+        return `
+          <circle class="projection-radius" cx="${item.x}" cy="${item.y}" r="${radius}" fill="${teamColor(item.team)}" stroke="${teamColor(item.team)}" opacity="${visible ? 1 : 0.22}">
+            <title>${escapeAttr(item.team)} · radio RMS ${fmt.format(radius)} px · p80 ${fmt.format(item.radiusP80)} px · ${item.count} jugadores</title>
+          </circle>
+        `;
+      }).join('') : '';
+      const intraRadiusHtml = showIntraRadii ? selectedCentroids.map(item => {
+        const intra = intraRadius(item.team);
+        if (intra == null) return '';
+        const visible = matchesFilter({ name: '', team: item.team, position: '' });
+        const mean = intraStats[item.team]?.mean;
+        const fillOpacity = 0.04 + intra.homogeneity * 0.32;
+        const strokeOpacity = 0.55 + intra.homogeneity * 0.42;
+        return `
+          <circle class="projection-intra-radius" cx="${item.x}" cy="${item.y}" r="${intra.radius}" fill="${teamColor(item.team)}" stroke="${teamColor(item.team)}" fill-opacity="${fillOpacity}" stroke-opacity="${strokeOpacity}" opacity="${visible ? 1 : 0.22}">
+            <title>${escapeAttr(item.team)} · homogeneidad intra ${fmt.format(intra.median)} · radio normalizado ${fmt.format(intra.radius)} px · promedio intra ${fmt.format(mean)}</title>
+          </circle>
+        `;
+      }).join('') : '';
+      const centroidHtml = showCentroids ? selectedCentroids.map(item => {
+        const visible = matchesFilter({ name: '', team: item.team, position: '' });
+        return `
+          <g opacity="${visible ? 1 : 0.22}">
+            <path class="projection-centroid" style="fill:${teamColor(item.team)}" d="M${item.x - 6},${item.y} L${item.x},${item.y - 6} L${item.x + 6},${item.y} L${item.x},${item.y + 6} Z">
+              <title>${escapeAttr(item.team)} · ${item.count} jugadores · radio RMS ${fmt.format(item.radius)} px</title>
+            </path>
+            <text class="projection-label" x="${item.x + 8}" y="${item.y + 4}">${escapeAttr(item.team)}</text>
+          </g>
+        `;
+      }).join('') : '';
+      document.getElementById(summaryId).textContent =
+        `${projection.method || '2D'} · ${projection.players_count} jugadores · ${state.projectionSelectedTeams.size}/${projection.teams_count} selecciones coloreadas · ${focusedCount}/${selectedCount} puntos activos`;
+      view.innerHTML = `
+        <svg class="projection-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Mapa 2D de jugadores">
+          <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#98a2b3" stroke-width="1" />
+          <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#98a2b3" stroke-width="1" />
+          <g>${radiusHtml}</g>
+          <g>${intraRadiusHtml}</g>
+          <g>${pointHtml}</g>
+          <g>${centroidHtml}</g>
+        </svg>
+      `;
+    }
+
+    function playersForTeam(team) {
+      return state.payload.players.filter(player => player.team === team);
+    }
+
+    function similarityForPlayers(a, b) {
+      return state.payload.player_similarity_matrix?.[a.idx]?.[b.idx] ?? null;
+    }
+
+    function stats(values) {
+      const clean = values.filter(value => value != null && Number.isFinite(value)).sort((a, b) => a - b);
+      if (!clean.length) return { count: 0, mean: null, median: null, min: null, max: null };
+      const total = clean.reduce((acc, value) => acc + value, 0);
+      return {
+        count: clean.length,
+        mean: total / clean.length,
+        median: clean[Math.floor(clean.length / 2)],
+        min: clean[0],
+        max: clean[clean.length - 1],
+      };
+    }
+
+    function openPairModal(teamA, teamB) {
+      if (!state.payload || !teamA || !teamB) return;
+      const aPlayers = playersForTeam(teamA);
+      const bPlayers = playersForTeam(teamB);
+      const values = [];
+      aPlayers.forEach(playerA => bPlayers.forEach(playerB => {
+        const value = similarityForPlayers(playerA, playerB);
+        values.push(value);
+      }));
+      const summary = stats(values);
+      document.getElementById('pairModalTitle').textContent = `${teamA} vs ${teamB}`;
+      document.getElementById('pairModalSubtitle').textContent =
+        `${aPlayers.length} x ${bPlayers.length} jugadores aceptados por QC`;
+      document.getElementById('pairModalSummary').innerHTML = [
+        ['Promedio', summary.mean == null ? '-' : fmt.format(summary.mean)],
+        ['Mediana', summary.median == null ? '-' : fmt.format(summary.median)],
+        ['Max', summary.max == null ? '-' : fmt.format(summary.max)],
+        ['Pares', summary.count.toLocaleString('es-AR')],
+      ].map(([label, value]) => `
+        <div class="mini-stat">
+          <strong>${value}</strong>
+          <span>${label}</span>
+        </div>
+      `).join('');
+      const cols = bPlayers.map(player => (
+        `<div class="player-col" title="${escapeAttr(player.name)}">${player.name}</div>`
+      )).join('');
+      const rows = aPlayers.map(player => (
+        `<div class="player-row" title="${escapeAttr(player.name)}">${player.name}</div>`
+      ));
+      const bodyItems = [];
+      bodyItems.push('<div class="player-corner">jugador vs jugador</div>');
+      bodyItems.push(cols);
+      for (let i = 0; i < aPlayers.length; i++) {
+        bodyItems.push(rows[i]);
+        bodyItems.push(bPlayers.map(playerB => {
+          const playerA = aPlayers[i];
+          const value = similarityForPlayers(playerA, playerB);
+          const label = value == null ? '-' : fmt.format(value);
+          const title = `${playerA.name} vs ${playerB.name}: ${label}`;
+          return `<div class="player-cell" title="${escapeAttr(title)}" style="background:${playerScoreColor(value)}">${label}</div>`;
+        }).join(''));
+      }
+      document.getElementById('pairModalBody').innerHTML =
+        `<div class="player-heatmap" style="--cols:${Math.max(1, bPlayers.length)}">${bodyItems.join('')}</div>`;
+      document.getElementById('pairModal').hidden = false;
+    }
+
+    function closePairModal() {
+      document.getElementById('pairModal').hidden = true;
+    }
+
+    function setupPairModal() {
+      const backdrop = document.getElementById('pairModal');
+      document.getElementById('pairModalClose').addEventListener('click', closePairModal);
+      backdrop.addEventListener('click', event => {
+        if (event.target === backdrop) closePairModal();
+      });
+      window.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !backdrop.hidden) closePairModal();
+      });
+    }
+
+    function renderTeamViews() {
+      renderMetricNotes();
+      renderMatrix(state.payload);
+      renderClusterHeatmap(state.payload);
+      renderGraph(state.payload);
+      renderCommunities();
+      renderPlayerHierarchy();
+      renderProjection();
+      renderReduction();
+      renderAttraction();
+    }
+
+    function setupAggregationSelector() {
+      const select = document.getElementById('aggregationMode');
+      select.value = state.aggregation;
+      select.addEventListener('change', () => {
+        state.aggregation = select.value;
+        renderTeamViews();
+      });
+    }
+
+    function setupDatasetSelector() {
+      const select = document.getElementById('datasetMode');
+      select.value = state.dataset;
+      select.addEventListener('change', () => {
+        const next = new URL(window.location.href);
+        next.searchParams.set('dataset', select.value);
+        window.location.href = next.toString();
+      });
+    }
+
+    function setupGraphControls() {
+      const mode = document.getElementById('graphMode');
+      const k = document.getElementById('graphK');
+      const threshold = document.getElementById('graphThreshold');
+      const syncVisibility = () => {
+        document.getElementById('graphKControl').style.display = state.graphMode === 'knn' ? 'inline-flex' : 'none';
+        document.getElementById('graphThresholdControl').style.display = state.graphMode === 'threshold' ? 'inline-flex' : 'none';
+      };
+      mode.value = state.graphMode;
+      k.value = String(state.graphK);
+      threshold.value = String(state.graphPercentile);
+      document.getElementById('graphKValue').textContent = String(state.graphK);
+      document.getElementById('graphThresholdValue').textContent = String(state.graphPercentile);
+      syncVisibility();
+      mode.addEventListener('change', () => {
+        state.graphMode = mode.value;
+        syncVisibility();
+        renderGraph(state.payload);
+      });
+      k.addEventListener('input', () => {
+        state.graphK = Number(k.value);
+        document.getElementById('graphKValue').textContent = String(state.graphK);
+        renderGraph(state.payload);
+      });
+      threshold.addEventListener('input', () => {
+        state.graphPercentile = Number(threshold.value);
+        document.getElementById('graphThresholdValue').textContent = String(state.graphPercentile);
+        renderGraph(state.payload);
+      });
+    }
+
+    function renderPairs(payload) {
+      const rows = (payload.top_pairs_cross_team || []).slice(0, 40).map(pair => `
+        <div class="pair">
+          <div class="score">${fmt.format(pair.score)}</div>
+          <div class="pair-names">
+            <div><strong>${pair.a_name}</strong> <span>${pair.a_team}</span></div>
+            <div><strong>${pair.b_name}</strong> <span>${pair.b_team}</span></div>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('pairs').innerHTML = rows;
+    }
+
+    function renderAttraction() {
+      const attraction = state.attraction;
+      const view = document.getElementById('attractionView');
+      if (!attraction?.team_attraction?.length) {
+        document.getElementById('attractionMetricNote').textContent =
+          'No hay payload de atraccion kNN generado para este dataset.';
+        document.getElementById('attractionSummary').textContent = '';
+        view.innerHTML = '';
+        return;
+      }
+      document.getElementById('attractionMetricNote').textContent =
+        `Vecinos externos calculados sobre similitud jugador-jugador original; k=${attraction.k}. No usa la geometria 2D.`;
+      const rows = attraction.team_attraction
+        .filter(row => state.team === 'all' || row.team === state.team)
+        .map(row => {
+          const destinations = row.top_destinations.map(dest => {
+            const width = Math.max(2, dest.share * 100);
+            return `
+              <div class="pair">
+                <div class="score">${fmt.format(dest.share)}</div>
+                <div class="pair-names">
+                  <div><strong>${dest.team}</strong> <span>${dest.count}/${row.neighbors_count} vecinos · score ${fmt.format(dest.mean_score)}</span></div>
+                  <div style="height:8px;border-radius:99px;background:#eef2f7;overflow:hidden;">
+                    <div style="height:100%;width:${width}%;background:${teamColor(dest.team)};"></div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+          return `
+            <section class="panel" style="overflow:hidden;">
+              <h2>${row.team} · ${row.players_count} jugadores · ${row.neighbors_count} vecinos externos</h2>
+              <div class="pairs">${destinations}</div>
+            </section>
+          `;
+        }).join('');
+      document.getElementById('attractionSummary').textContent =
+        `${attraction.teams_count} selecciones · ${attraction.players_count} jugadores · k=${attraction.k}`;
+      view.innerHTML = rows;
+    }
+
+    function renderCommunities() {
+      const exploration = state.clusterExploration;
+      const main = document.getElementById('communityMain');
+      const side = document.getElementById('communitySide');
+      if (!exploration?.methods?.length) {
+        document.getElementById('communitySummary').textContent = '';
+        document.getElementById('communitiesMetricNote').textContent =
+          'No hay payload de comunidades generado para este dataset.';
+        main.innerHTML = '<div class="panel-note">Generar con scripts/build_vitrina_cluster_exploration.py.</div>';
+        side.innerHTML = '';
+        return;
+      }
+      const method = exploration.methods[state.communityMethodIndex] || exploration.methods[0];
+      const summary = method.summary;
+      const size = summary.size || {};
+      document.getElementById('communitySummary').textContent =
+        `${summary.clusters_count} clusters · mediana ${fmt.format(size.median)} jugadores · mezcla ${fmt.format(summary.weighted_cluster_team_entropy_norm)} · fragmentacion ${fmt.format(summary.weighted_team_cluster_entropy_norm)}`;
+      document.getElementById('communitiesMetricNote').textContent =
+        `${methodLabel(method)}. Entropia equipos alta = clusters mas mezclados; fragmentacion alta = selecciones mas repartidas en clusters.`;
+
+      main.innerHTML = `
+        <div class="community-stat-grid">
+          <div class="community-stat"><strong>${summary.clusters_count}</strong><span>Clusters</span></div>
+          <div class="community-stat"><strong>${fmt.format(size.median)}</strong><span>Mediana de tamano</span></div>
+          <div class="community-stat"><strong>${fmt.format(summary.weighted_cluster_team_entropy_norm)}</strong><span>Mezcla de equipos</span></div>
+          <div class="community-stat"><strong>${fmt.format(summary.weighted_team_cluster_entropy_norm)}</strong><span>Fragmentacion seleccion</span></div>
+        </div>
+        <div class="community-card">
+          <h3>Proyeccion 2D de jugadores por ${state.communityColorMode === 'cluster' ? 'cluster' : 'seleccion'}</h3>
+          <div class="community-card-body">
+            <div>${communityMapDescription(method)}</div>
+            <div class="community-map-wrap" id="communityMap"></div>
+          </div>
+        </div>
+        ${(summary.clusters || summary.largest_clusters || []).map(cluster => renderClusterCard(cluster)).join('')}
+      `;
+      document.querySelectorAll('.community-team-select').forEach(select => {
+        select.addEventListener('change', () => {
+          const key = `${state.communityMethodIndex}:${select.dataset.cluster}`;
+          state.communityClusterFilters.set(key, select.value);
+          renderCommunities();
+        });
+      });
+      side.innerHTML = `
+        ${renderCommunityMapFilters(method)}
+        <div class="community-card">
+          <h3>Lectura del metodo</h3>
+          <div class="community-card-body">
+            <div><strong>${escapeAttr(methodLabel(method))}</strong></div>
+            <div>${methodDescription(method)}</div>
+            <div>External peer share: ${summary.mean_external_peer_share == null ? '-' : fmt.format(summary.mean_external_peer_share)}</div>
+          </div>
+        </div>
+        <div class="community-card">
+          <h3>Selecciones mas fragmentadas</h3>
+          <div class="community-card-body">
+            ${(summary.most_fragmented_teams || []).map(team => renderFragmentedTeam(team)).join('')}
+          </div>
+        </div>
+      `;
+      renderCommunityMap(method);
+      document.querySelectorAll('.community-team-check').forEach(input => {
+        input.addEventListener('change', () => {
+          const team = input.dataset.team;
+          if (state.communitySelectedTeams == null) {
+            state.communitySelectedTeams = new Set(state.payload?.teams || []);
+          }
+          if (input.checked) state.communitySelectedTeams.add(team);
+          else state.communitySelectedTeams.delete(team);
+          renderCommunities();
+        });
+      });
+      document.querySelectorAll('.community-cluster-check').forEach(input => {
+        input.addEventListener('change', () => {
+          const visible = visibleCommunityClusters(method);
+          if (input.checked) visible.add(input.dataset.cluster);
+          else visible.delete(input.dataset.cluster);
+          renderCommunities();
+        });
+      });
+      const allButton = document.getElementById('communityTeamsAll');
+      const noneButton = document.getElementById('communityTeamsNone');
+      const allClustersButton = document.getElementById('communityClustersAll');
+      const noneClustersButton = document.getElementById('communityClustersNone');
+      if (allButton) allButton.addEventListener('click', () => {
+        state.communitySelectedTeams = new Set(state.payload?.teams || []);
+        renderCommunities();
+      });
+      if (noneButton) noneButton.addEventListener('click', () => {
+        state.communitySelectedTeams = new Set();
+        renderCommunities();
+      });
+      if (allClustersButton) allClustersButton.addEventListener('click', () => {
+        state.communityVisibleClustersByMethod.set(
+          String(state.communityMethodIndex),
+          new Set(currentCommunityClusters(method).map(cluster => String(cluster.cluster))),
+        );
+        renderCommunities();
+      });
+      if (noneClustersButton) noneClustersButton.addEventListener('click', () => {
+        state.communityVisibleClustersByMethod.set(String(state.communityMethodIndex), new Set());
+        renderCommunities();
+      });
+    }
+
+    function communityMapDescription(method) {
+      if (!state.projection?.points?.length) return 'No hay proyeccion 2D disponible para este dataset.';
+      if (state.communityColorMode === 'team') {
+        return 'Cada punto es un jugador. El color indica seleccion y solo se muestran las selecciones marcadas en el panel lateral.';
+      }
+      return `Cada punto es un jugador. El color indica el cluster asignado por ${methodLabel(method)}; la posicion 2D viene de la solapa Mapa jugadores y no participa en el clustering.`;
+    }
+
+    function clusterLookup(method) {
+      const lookup = new Map();
+      for (const cluster of method.summary?.clusters || method.summary?.largest_clusters || []) {
+        for (const player of cluster.players || cluster.sample_players || []) {
+          lookup.set(player.idx, cluster.cluster);
+        }
+      }
+      return lookup;
+    }
+
+    function currentCommunityClusters(method) {
+      return method.summary?.clusters || method.summary?.largest_clusters || [];
+    }
+
+    function visibleCommunityClusters(method) {
+      const clusters = currentCommunityClusters(method).map(cluster => String(cluster.cluster));
+      const key = String(state.communityMethodIndex);
+      if (!state.communityVisibleClustersByMethod.has(key)) {
+        state.communityVisibleClustersByMethod.set(key, new Set(clusters));
+      }
+      return state.communityVisibleClustersByMethod.get(key);
+    }
+
+    function renderCommunityMap(method) {
+      const target = document.getElementById('communityMap');
+      const projection = state.projection;
+      if (!target || !projection?.points?.length) {
+        if (target) target.innerHTML = '<div class="panel-note">Sin proyeccion disponible.</div>';
+        return;
+      }
+      const width = 920;
+      const height = 520;
+      const pad = 38;
+      const lookup = clusterLookup(method);
+      const selectedTeams = state.communitySelectedTeams ?? new Set(state.payload?.teams || []);
+      const selectedClusters = visibleCommunityClusters(method);
+      const points = projection.points
+        .filter(point => {
+          const clusterId = lookup.get(point.idx);
+          const clusterOk = selectedClusters.has(String(clusterId));
+          const teamOk = state.communityColorMode === 'cluster' || selectedTeams.has(point.team);
+          return clusterOk && teamOk;
+        })
+        .map(point => {
+          const clusterId = lookup.get(point.idx);
+          const x = pad + point.x * (width - pad * 2);
+          const y = height - pad - point.y * (height - pad * 2);
+          const fill = state.communityColorMode === 'team'
+            ? teamColor(point.team)
+            : clusterColor(clusterId);
+          const title = `${point.name} · ${point.team} · cluster ${clusterId}`;
+          return `
+            <circle cx="${x}" cy="${y}" r="3.4" fill="${fill}" stroke="rgba(17,24,39,0.45)" stroke-width="0.5" opacity="0.82">
+              <title>${escapeAttr(title)}</title>
+            </circle>
+          `;
+        }).join('');
+      const labels = state.communityColorMode === 'cluster'
+        ? communityClusterCentroidLabels(projection, lookup, width, height, pad, selectedClusters)
+        : '';
+      target.innerHTML = `
+        <svg class="community-map-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Proyeccion 2D de comunidades">
+          <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#98a2b3" stroke-width="1" />
+          <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#98a2b3" stroke-width="1" />
+          <g>${points}</g>
+          <g>${labels}</g>
+        </svg>
+      `;
+    }
+
+    function communityClusterCentroidLabels(projection, lookup, width, height, pad, selectedClusters) {
+      const grouped = new Map();
+      for (const point of projection.points) {
+        const clusterId = lookup.get(point.idx);
+        if (clusterId == null) continue;
+        if (!selectedClusters.has(String(clusterId))) continue;
+        if (!grouped.has(clusterId)) grouped.set(clusterId, []);
+        grouped.get(clusterId).push(point);
+      }
+      return [...grouped.entries()].map(([clusterId, points]) => {
+        const total = points.reduce((acc, point) => {
+          acc.x += pad + point.x * (width - pad * 2);
+          acc.y += height - pad - point.y * (height - pad * 2);
+          return acc;
+        }, { x: 0, y: 0 });
+        const x = total.x / points.length;
+        const y = total.y / points.length;
+        return `
+          <text class="projection-label" x="${x + 7}" y="${y + 4}">C${clusterId}</text>
+          <circle cx="${x}" cy="${y}" r="6" fill="${clusterColor(clusterId)}" stroke="#111827" stroke-width="1.2">
+            <title>Cluster ${clusterId} · ${points.length} jugadores</title>
+          </circle>
+        `;
+      }).join('');
+    }
+
+    function renderCommunityMapFilters(method) {
+      const teams = state.payload?.teams || [];
+      if (state.communitySelectedTeams == null) {
+        state.communitySelectedTeams = new Set(teams);
+      }
+      const clusters = currentCommunityClusters(method);
+      const visibleClusters = visibleCommunityClusters(method);
+      const disabled = state.communityColorMode !== 'team';
+      return `
+        <div class="community-filter-columns">
+          <div class="community-card">
+            <h3>Clusters visibles</h3>
+            <div class="community-card-body">
+              <div>Filtra puntos del mapa por cluster, independientemente del modo de color.</div>
+              <div class="projection-side-actions" style="padding:0;border:0;">
+                <button type="button" id="communityClustersAll">Todos</button>
+                <button type="button" id="communityClustersNone">Ninguno</button>
+              </div>
+              <div class="community-team-picker">
+                ${clusters.map(cluster => `
+                  <label title="Cluster ${cluster.cluster}">
+                    <input class="community-cluster-check" type="checkbox" data-cluster="${cluster.cluster}"${visibleClusters.has(String(cluster.cluster)) ? ' checked' : ''}>
+                    <span class="community-team-dot" style="background:${clusterColor(cluster.cluster)}"></span>
+                    <span class="projection-team-name">Cluster ${cluster.cluster}</span>
+                    <small>${cluster.size}</small>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="community-card">
+            <h3>Selecciones visibles</h3>
+            <div class="community-card-body">
+              <div>${disabled ? 'Este filtro se aplica cuando Color mapa esta en Seleccion.' : 'Marcar selecciones para mostrar u ocultar puntos en el mapa.'}</div>
+              <div class="projection-side-actions" style="padding:0;border:0;">
+                <button type="button" id="communityTeamsAll"${disabled ? ' disabled' : ''}>Todas</button>
+                <button type="button" id="communityTeamsNone"${disabled ? ' disabled' : ''}>Ninguna</button>
+              </div>
+              <div class="community-team-picker">
+                ${teams.map(team => `
+                  <label title="${escapeAttr(team)}">
+                    <input class="community-team-check" type="checkbox" data-team="${escapeAttr(team)}"${state.communitySelectedTeams.has(team) ? ' checked' : ''}${disabled ? ' disabled' : ''}>
+                    <span class="community-team-dot" style="background:${teamColor(team)}"></span>
+                    <span class="projection-team-name">${escapeAttr(team)}</span>
+                    <small>${state.payload?.team_player_counts?.[team] || 0}</small>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderClusterCard(cluster) {
+      const maxCount = Math.max(...(cluster.top_teams || []).map(item => item.count), 1);
+      const filterKey = `${state.communityMethodIndex}:${cluster.cluster}`;
+      const selectedTeam = state.communityClusterFilters.get(filterKey) || 'all';
+      const bars = (cluster.top_teams || []).map(item => `
+        <div class="community-bar">
+          <span title="${escapeAttr(item.team)}">${escapeAttr(item.team)}</span>
+          <div class="community-bar-track"><div class="community-bar-fill" style="width:${Math.max(4, item.count / maxCount * 100)}%;background:${teamColor(item.team)}"></div></div>
+          <small>${item.count}</small>
+        </div>
+      `).join('');
+      const options = [
+        `<option value="all"${selectedTeam === 'all' ? ' selected' : ''}>Todas juntas</option>`,
+        ...(cluster.top_teams || []).map(item => (
+          `<option value="${escapeAttr(item.team)}"${selectedTeam === item.team ? ' selected' : ''}>${escapeAttr(item.team)} (${item.count})</option>`
+        )),
+      ].join('');
+      const allPlayers = cluster.players || cluster.sample_players || [];
+      const filteredPlayers = allPlayers.filter(player => selectedTeam === 'all' || player.team === selectedTeam);
+      const visiblePlayers = filteredPlayers.slice(0, selectedTeam === 'all' ? 90 : filteredPlayers.length);
+      const hiddenCount = filteredPlayers.length - visiblePlayers.length;
+      const playerGrid = visiblePlayers.map(player => `
+        <article class="community-player">
+          <img src="${imageUrl(player.local_image)}" alt="${escapeAttr(player.name)}" loading="lazy">
+          <div>
+            <strong title="${escapeAttr(player.name)}">${escapeAttr(player.name)}</strong>
+            <span title="${escapeAttr(player.team)}">${escapeAttr(player.team)}${player.position ? ' · ' + escapeAttr(player.position) : ''}</span>
+          </div>
+        </article>
+      `).join('');
+      return `
+        <article class="community-card">
+          <h3>Cluster ${cluster.cluster} · ${cluster.size} jugadores · ${cluster.teams_count} selecciones</h3>
+          <div class="community-card-body">
+            <div>Entropia por seleccion: ${fmt.format(cluster.team_entropy_norm)}</div>
+            <div class="community-filter-row">
+              <label>
+                Ver jugadores
+                <select class="community-team-select" data-cluster="${cluster.cluster}">
+                  ${options}
+                </select>
+              </label>
+              <span>${filteredPlayers.length} jugadores${hiddenCount > 0 ? ` · mostrando ${visiblePlayers.length}` : ''}</span>
+            </div>
+            <div class="community-bars">${bars}</div>
+            <div class="community-player-grid">${playerGrid}</div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderFragmentedTeam(team) {
+      const maxCount = Math.max(...(team.top_clusters || []).map(item => item.count), 1);
+      const bars = (team.top_clusters || []).map(item => `
+        <div class="community-bar">
+          <span>Cluster ${item.cluster}</span>
+          <div class="community-bar-track"><div class="community-bar-fill" style="width:${Math.max(4, item.count / maxCount * 100)}%;"></div></div>
+          <small>${item.count}</small>
+        </div>
+      `).join('');
+      return `
+        <div>
+          <div><strong>${escapeAttr(team.team)}</strong> · ${team.clusters_count} clusters · frag ${fmt.format(team.cluster_entropy_norm)}</div>
+          <div class="community-bars">${bars}</div>
+        </div>
+      `;
+    }
+
+    function renderPlayerHierarchy() {
+      const payload = state.playerHierarchy;
+      const canvas = document.getElementById('playerHierarchyCanvas');
+      const side = document.getElementById('playerHierarchySide');
+      if (!payload?.subsets?.length || !canvas) {
+        document.getElementById('playerHierarchyNote').textContent =
+          'No hay jerarquia de jugadores generada para este dataset.';
+        document.getElementById('playerHierarchySummary').textContent = '';
+        if (side) side.innerHTML = '';
+        return;
+      }
+      const subset = payload.subsets[state.playerHierarchySubsetIndex] || payload.subsets[0];
+      const n = subset.players_count;
+      const band = 18;
+      const labelPad = 130;
+      const cell = Math.max(1, Math.floor(Math.min(760, 1200 / Math.max(1, n)) / Math.max(1, n) * n));
+      const heatSize = Math.max(360, Math.min(820, n * Math.max(1, Math.floor(760 / Math.max(1, n)))));
+      const pixel = Math.max(1, Math.floor(heatSize / n));
+      const size = n * pixel;
+      canvas.width = labelPad + band * 2 + size;
+      canvas.height = labelPad + band * 2 + size;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const x0 = labelPad + band * 2;
+      const y0 = band * 2;
+      const matrix = subset.similarity_matrix;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          ctx.fillStyle = playerScoreColor(matrix[i][j]);
+          ctx.fillRect(x0 + j * pixel, y0 + i * pixel, pixel, pixel);
+        }
+      }
+
+      for (let i = 0; i < n; i++) {
+        const player = subset.players[i];
+        ctx.fillStyle = teamColor(player.team);
+        ctx.fillRect(labelPad, y0 + i * pixel, band, pixel);
+        const clusterId = hierarchyClusterForPlayer(player.idx);
+        ctx.fillStyle = clusterId == null ? '#d0d5dd' : clusterColor(clusterId);
+        ctx.fillRect(labelPad + band, y0 + i * pixel, band, pixel);
+        if (pixel >= 3 || i % Math.ceil(12 / pixel) === 0) {
+          ctx.fillStyle = '#344054';
+          ctx.font = '10px system-ui, sans-serif';
+          ctx.fillText(player.name.slice(0, 18), 4, y0 + i * pixel + 9);
+        }
+      }
+      ctx.strokeStyle = '#98a2b3';
+      ctx.strokeRect(x0, y0, size, size);
+      ctx.fillStyle = '#475467';
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText('bandas: seleccion | cluster', labelPad, y0 + size + 18);
+
+      document.getElementById('playerHierarchyNote').textContent =
+        `${subset.label}. Linkage ${subset.hierarchy?.linkage || payload.linkage}; distancia = ${payload.distance}.`;
+      document.getElementById('playerHierarchySummary').textContent =
+        `${n} jugadores · ${subset.teams_count} selecciones · matriz ${n}x${n}`;
+      side.innerHTML = `
+        <div class="community-card">
+          <h3>Selecciones en el subconjunto</h3>
+          <div class="community-card-body">
+            <div class="community-bars">
+              ${renderHierarchyTeamBars(subset)}
+            </div>
+          </div>
+        </div>
+        <div class="community-card">
+          <h3>Lectura</h3>
+          <div class="community-card-body">
+            <div>Bloques claros sobre la diagonal indican grupos de jugadores similares bajo el orden jerarquico.</div>
+            <div>Si una banda de seleccion se reparte en muchos bloques, esa seleccion es heterogenea en este subconjunto.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function hierarchyClusterForPlayer(idx) {
+      const method = state.clusterExploration?.methods?.[state.communityMethodIndex]
+        || state.clusterExploration?.methods?.[0];
+      if (!method) return null;
+      const lookup = clusterLookup(method);
+      return lookup.get(idx);
+    }
+
+    function renderHierarchyTeamBars(subset) {
+      const entries = Object.entries(subset.team_counts || {});
+      const maxCount = Math.max(...entries.map(([, count]) => count), 1);
+      return entries.slice(0, 28).map(([team, count]) => `
+        <div class="community-bar">
+          <span title="${escapeAttr(team)}">${escapeAttr(team)}</span>
+          <div class="community-bar-track"><div class="community-bar-fill" style="width:${Math.max(4, count / maxCount * 100)}%;background:${teamColor(team)}"></div></div>
+          <small>${count}</small>
+        </div>
+      `).join('');
+    }
+
+    function renderPlayers() {
+      const payload = state.payload;
+      const q = state.query.trim().toLowerCase();
+      const filtered = payload.players.filter(player => {
+        const teamOk = state.team === 'all' || player.team === state.team;
+        const text = `${player.name} ${player.team} ${player.position || ''}`.toLowerCase();
+        return teamOk && (!q || text.includes(q));
+      });
+      document.getElementById('players').innerHTML = filtered.map(player => `
+        <article class="player">
+          <img src="${imageUrl(player.local_image)}" alt="${player.name}" loading="lazy">
+          <div class="player-body">
+            <strong>${player.name}</strong>
+            <span>${player.team}${player.position ? ' · ' + player.position : ''}</span>
+            <span>det ${fmt.format(player.metrics.det_score)} · bbox ${fmt.format(player.metrics.bbox_area_ratio)}</span>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    async function main() {
+      setupDatasetSelector();
+      const dataset = DATASETS[state.dataset];
+      const response = await fetch(dataset.payloadUrl);
+      if (!response.ok) {
+        throw new Error(`No se pudo leer ${dataset.payloadUrl}: ${response.status}`);
+      }
+      const payload = await response.json();
+      state.payload = payload;
+      state.projection = await loadProjection(dataset.projectionUrl);
+      state.attraction = await loadProjection(dataset.attractionUrl);
+      state.clusterExploration = await loadProjection(dataset.clusterUrl);
+      state.playerHierarchy = await loadProjection(dataset.playerHierarchyUrl);
+      const initialReduction = await loadProjection(dataset.reductionUrls?.[state.reductionMethod]);
+      if (initialReduction) state.reductions.set(state.reductionMethod, initialReduction);
+      document.getElementById('datasetNotice').textContent = dataset.notice;
+      document.getElementById('subtitle').textContent =
+        `${dataset.label} · ${payload.players_count} jugadores · ${payload.teams_count} selecciones · ${payload.embedding_model || 'embedding'} · payload local`;
+      renderMetrics(payload);
+      renderTeamFilter(payload);
+      setupAggregationSelector();
+      setupGraphControls();
+      setupProjectionDisplayControls();
+      setupReductionControls();
+      setupAttractionControls();
+      setupCommunityControls();
+      setupPlayerHierarchyControls();
+      initializeProjectionTeamControls();
+      renderReductionTeamControls();
+      renderTeamViews();
+      renderPairs(payload);
+      renderPlayers();
+      setupTabs();
+      setupPairModal();
+      document.getElementById('search').addEventListener('input', event => {
+        state.query = event.target.value;
+        renderPlayers();
+        renderProjection();
+        renderReduction();
+      });
+    }
+
+    async function loadProjection(url) {
+      if (!url) return null;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      return response.json();
+    }
+
+    main().catch(error => {
+      document.getElementById('subtitle').textContent = error.message;
+      console.error(error);
+    });
+  </script>
+</body>
+</html>
