@@ -9,6 +9,65 @@ Cada entrada incluye: hash de commit, título de una línea, IDs de tarea relaci
 
 ---
 
+## 2026-06-28
+
+### `9d615df` · [codex] Vitrina FIFA — QC/payloads, comunidades multinivel, jerarquía de jugadores y viewer local `Vitrina` `T14` `T15`
+
+Formaliza el bloque exploratorio de vitrina que venía sin commitear y agrega las
+vistas pedidas para entender estructura jugador→cluster→selección.
+
+- **Ingesta/QC y payloads**:
+  - `scripts/qc_transfermarkt_headshots.py`: QC facial reutilizable para
+    Transfermarkt y manifiestos FIFA anidados; soporta `det_thresh`, reglas de
+    cara dominante, embeddings y métricas de bbox/detección.
+  - `src/phyloface/core/detector.py`: `FaceDetector` ahora pasa `det_thresh` real a
+    InsightFace y tiene fallback PIL cuando OpenCV no decodifica imágenes
+    descargadas como `.png` pero servidas en formatos modernos.
+  - `scripts/build_vitrina_similarity_payload.py`: genera matriz jugador-jugador,
+    matrices selección-selección `mean`/`median`/`top3_mean`/`top5_mean`, stats intra
+    y rankings de pares.
+  - `scripts/report_vitrina_coverage.py`: reporte HTML/CSV de cobertura y rechazos.
+
+- **Visualizaciones y algoritmos**:
+  - `scripts/build_vitrina_embedding_projection.py`: proyecciones 2D `pca`, `mds`,
+    `isomap`, `spectral`, `tsne` desde embeddings QC.
+  - `scripts/build_vitrina_knn_attraction.py`: atracción externa kNN por selección
+    sobre la matriz original jugador-jugador.
+  - `scripts/build_vitrina_cluster_exploration.py`: comunidades kNN, kNN externo,
+    spectral/agglomerativo y multiplex facial+selección; soporta barrido `--k-values`.
+  - `scripts/build_vitrina_player_hierarchy.py`: jerarquías jugador-jugador por
+    distancia `1-coseno` y linkage average para heatmaps canvas por subconjunto.
+  - `scripts/plot_vitrina_heatmap_hclust.R`: heatmaps hclust por agregación.
+
+- **Viewer local**:
+  - `_meta/vitrina_pilot_viewer.html` queda versionado aunque `*.html` esté
+    gitignored. Carga dataset FIFA por defecto y Transfermarkt opcional; incluye
+    Matriz original, Heatmap clusterizado, Grafo, Comunidades, Jerárquico jugadores,
+    Mapa jugadores, Reducciones y Atracción kNN.
+  - Cada solapa tiene explicación colapsada de algoritmo, ventajas/desventajas y
+    referencias a la métrica base para evitar repetición.
+  - Comunidades permite pintar proyección por cluster o selección, filtrar clusters
+    y selecciones, y ver fotos de jugadores por cluster+selección.
+  - Jerárquico jugadores renderiza heatmap jugador-vs-jugador en canvas para
+    subconjuntos precomputados.
+
+- **Notas / investigación**:
+  - `chatGPRsugestions/`: sugerencias originales y síntesis de candidatos
+    PaCMAP/PHATE/TriMAP/HDBSCAN/Leiden/Node2Vec.
+  - `chatGPRsugestions/fairface_smoke.md`: smoke de FairFace como dataset de
+    auditoría demográfica, no como modelo; `det_thresh=0.05` aceptó 15/16 pero exige
+    QC distinto porque FairFace ya viene pre-cropeado.
+  - `_meta/VITRINA_MUNDIAL2026_PLAN.md`,
+    `_meta/VITRINA_EQUIPOS_FUENTES.md` y
+    `_meta/ANTECEDENTES_APP_PRIMARIA_COMPETENCIA.md` actualizan contexto de release,
+    fuentes/licencias y competencia de la App primaria.
+
+Validación: `py_compile` de los scripts Python nuevos, sintaxis JS del viewer con
+`node vm.Script`, servidor local `python3 -m http.server 4181` con HTTP 200 para
+HTML/JSONs. Outputs en `data/` siguen gitignored; no se publican fotos ni payloads
+con `local_image`. Episodio KG capturado:
+`2026-06-28-multilevel-facial-vitrine-needs-graph-first-diego-lenovo-debian.md`.
+
 ## 2026-06-26
 
 ### `(sin commit)` · [codex] Vitrina FIFA — atracción kNN y cierre de sesión

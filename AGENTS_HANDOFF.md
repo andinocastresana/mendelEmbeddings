@@ -50,6 +50,64 @@ Este proyecto lo trabajan varios agentes de IA (Claude Code, Codex, y futuros).
 
 ---
 
+## 2026-06-28 · [codex] · Vitrina FIFA commiteada + comunidades/jerarquía
+
+- **Rama / commits**: `main`. Commit funcional `9d615df`
+  (`[codex] Vitrina FIFA: QC, comunidades y viewer exploratorio`) + commit de
+  docs/DEVLOG de cierre de esta sesión.
+- **Hice**: commiteé el bloque de vitrina que venía in-flight: QC Transfermarkt/FIFA,
+  builder de payload de similitud, proyecciones PCA/MDS/Isomap/Spectral/t-SNE,
+  atracción kNN externa, exploración de comunidades kNN/multiplex, jerarquía
+  jugador-jugador y viewer local `_meta/vitrina_pilot_viewer.html` versionado con
+  solapas explicadas. El viewer local queda corriendo en
+  `http://127.0.0.1:4181/_meta/vitrina_pilot_viewer.html?dataset=fifa` si el
+  servidor no fue detenido.
+- **Resultado**: la vitrina permite leer jugador→cluster→selección: comunidades
+  con filtros por cluster/selección, fotos por cluster+selección, proyección 2D
+  coloreable por cluster o selección, y heatmap jerárquico jugador-vs-jugador en
+  canvas por subconjuntos. Para barrer comunidades: `k=5` abre más granularidad,
+  `k=8` conserva macroclusters útiles, `k=24` fusiona demasiado; multiplex
+  `k=8,beta=0.2` parece buen punto intermedio entre entidad selección y subgrupos
+  faciales cruzados.
+- **Abierto / handoff**: siguiente paso conversado = profundizar FairFace: explicar
+  bien que FairFace es dataset etiquetado de auditoría demográfica, armar muestra
+  estratificada `race/gender/age`, adaptar QC a crops 224x224 (rostro dominante por
+  área y fallback de alineación desde crop completo) y medir si comunidades FIFA se
+  correlacionan demasiado con etiquetas FairFace. También queda decidir si instalar
+  PaCMAP/HDBSCAN/Leiden para mejorar representación y clusters.
+- **Ojo con**: outputs pesados siguen en `data/` gitignored. No publicar fotos
+  FIFA/Getty/Transfermarkt ni JSONs con `local_image`. `_meta/vitrina_pilot_viewer.html`
+  está forzado al índice pese a `*.html` porque es el prototipo local versionado.
+  Episodio KG capturado:
+  `2026-06-28-multilevel-facial-vitrine-needs-graph-first-diego-lenovo-debian.md`.
+
+## 2026-06-27 · [codex] · FairFace smoke + candidatos de agrupamiento
+
+- **Rama / commits**: `main`, sin commits.
+- **Hice**: moví `/home/diego/Descargas/posibilidades representacion.md` a
+  `chatGPRsugestions/posibilidades representacion.md` y agregué dos notas:
+  `chatGPRsugestions/candidatos_agrupamiento.md` con candidatos priorizados
+  (kNN+comunidades, aglomerativo, spectral, multiplex, PaCMAP/PHATE/TriMAP como
+  dependencias futuras) y `chatGPRsugestions/fairface_smoke.md` con el smoke de
+  FairFace. Probé `HuggingFaceM4/FairFace` config `0.25`, split `train`, en
+  streaming; guardé una muestra de 16 imágenes en
+  `data/output/fairface_smoke/sample_0_25_train_n16/`.
+- **Resultado**: FairFace carga bien desde Hugging Face y trae imágenes 224x224 con
+  etiquetas `age`, `gender`, `race`, `service_test`. Con `FaceDetector`/InsightFace
+  `buffalo_l`: `det_thresh=0.20` aceptó 5/16; `det_thresh=0.05` aceptó 15/16 con
+  embeddings 512D, pero muchas detecciones múltiples/espurias porque FairFace ya
+  viene pre-cropeado. Artefactos locales: `manifest.json`, `qc_embeddings.json`,
+  `qc_embeddings_det005.json` bajo `data/output/fairface_smoke/...` (gitignored).
+- **Abierto / handoff**: para usar FairFace en serio, no reutilizar QC FIFA tal cual:
+  seleccionar rostro dominante por área, guardar métricas de QC y quizá probar una
+  ruta de alineación desde crop completo cuando falle la detección. Siguiente paso
+  recomendado: muestra estratificada por `race/gender/age`, embeddings, kNN y
+  auditoría de separación/mezcla demográfica; en agrupamientos empezar con kNN+
+  comunidades y aglomerativo/spectral porque corren con deps actuales de `face-sim`.
+- **Ojo con**: el permiso de red fue necesario para Hugging Face. `face-sim` tiene
+  `sklearn/scipy/networkx`, pero no `pacmap`, `trimap`, `phate`, `hdbscan`,
+  `igraph/leidenalg`. No se commiteó nada.
+
 ## 2026-06-27 · [claude] · Commiteado el bloque geo/colonial (los 5 scripts) — resuelta la decisión diferida
 
 - **Rama / commits**: `main`. `4e1d5d3` (los 5 scripts geo) + el commit de docs de esta
